@@ -1,10 +1,9 @@
-from fastapi import FastAPI
-from app.database import engine
+from fastapi import FastAPI, Depends, HTTPException
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+from app.database import engine, get_db
 from app import models
 from app.routers import auth, session, query
-
-# Create tables
-models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="SeekRight API")
 
@@ -23,5 +22,13 @@ def root():
 @app.get("/health")
 def health():
     return {"status": "healthy"}
+
+@app.get("/health/db")
+def health_db(db: Session = Depends(get_db)):
+    try:
+        db.execute(text("SELECT 1"))
+        return {"status": "ok"}
+    except Exception as e:
+        raise HTTPException(status_code=503, detail="Database unreachable")
 
 

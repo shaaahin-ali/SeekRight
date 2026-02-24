@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SeekRight - Ingestion UI</title>
+    <style>
+        body { font-family: sans-serif; max-width: 600px; margin: 2rem auto; padding: 1rem; }
+        .form-group { margin-bottom: 1rem; }
+        label { display: block; margin-bottom: 0.5rem; font-weight: bold; }
+        input { width: 100%; padding: 0.5rem; box-sizing: border-box; }
+        button { padding: 0.5rem 1rem; cursor: pointer; }
+        #status-container { margin-top: 2rem; padding: 1rem; border: 1px solid #ccc; background-color: #f9f9f9; }
+        .error { color: red; margin-top: 1rem; }
+    </style>
+</head>
+<body>
+
+    <h1>SeekRight Ingestion</h1>
+    
+    <div id="creation-ui">
+        <h2>Create Session</h2>
+        <div class="form-group">
+            <label for="subject_id">Subject ID:</label>
+            <input type="number" id="subject_id" required>
+        </div>
+        <div class="form-group">
+            <label for="youtube_url">YouTube URL:</label>
+            <input type="url" id="youtube_url" required>
+        </div>
+        <div class="form-group">
+            <label for="uploaded_by">Uploaded By (User ID):</label>
+            <input type="number" id="uploaded_by" required>
+        </div>
+        <button id="create-btn" onclick="createSession()">Create Session</button>
+        <div id="error-message" class="error"></div>
+    </div>
+
+    <div id="status-container" style="display: none;">
+        <h2>Session Status</h2>
+        <p>Session ID: <span id="display-session-id"></span></p>
+        <p>Status: <strong id="display-status"></strong></p>
+    </div>
+
+    <script>
+        let pollInterval;
+
+        const statusMap = {
+            "PENDING": "Queued",
+            "PROCESSING": "Transcribing",
+            "COMPLETED": "Ready",
+            "FAILED": "Error occurred"
+        };
+
+        async function createSession() {
+            const subjectId = document.getElementById('subject_id').value;
+            const youtubeUrl = document.getElementById('youtube_url').value;
+            const uploadedBy = document.getElementById('uploaded_by').value;
+            const errorDiv = document.getElementById('error-message');
+
+            errorDiv.textContent = "";
+
+            if (!subjectId || !youtubeUrl || !uploadedBy) {
+                errorDiv.textContent = "All fields are strictly required.";
+                return;
+            }
+
+            const payload = {
+                subject_id: parseInt(subjectId, 10),
+                youtube_url: youtubeUrl,
+                uploaded_by: parseInt(uploadedBy, 10)
+            };
+
+            try {
+                const response = await fetch('http://127.0.0.1:8000/api/session', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    const errData = await response.json();
+                    errorDiv.textContent = `Error: ${errData.detail || response.statusText}`;
+                    return;
+                }
+
+                const data = await response.json();
+                startPolling(data.session_id);
+
+            } catch (err) {
+                errorDiv.textContent = `Network Error: ${err.message}`;
+            }
+        }
+
+        function startPolling(sessionId) {
+            document.getElementById('creation-ui').style.display = 'none';
+            document.getElementById('status-container').style.display = 'block';
+            document.getElementById('display-session-id').textContent = sessionId;
+            document.getElementById('display-status').textContent = "Waiting...";
+
+            // Clear any existing poll
+            if (pollInterval) clearInterval(pollInterval);
+
+            // Fetch immediately, then every 4 seconds
+            checkStatus(sessionId);
+            pollInterval = setInterval(() => checkStatus(sessionId), 4000);
+        }
+
+        async function checkStatus(sessionId) {
+            try {
+                const response = await fetch(`http://127.0.0.1:8000/api/session/${sessionId}/status`);
+                if (!response.ok) {
+                    document.getElementById('display-status').textContent = "Failed to fetch status";
+                    return;
+                }
+
+                const data = await response.json();
+                const rawStatus = data.processing_status;
+                
+                // Map to deterministic UI states
+                const displayStatus = statusMap[rawStatus] || "Unknown state";
+                document.getElementById('display-status').textContent = displayStatus;
+
+                if (rawStatus === "COMPLETED" || rawStatus === "FAILED") {
+                    clearInterval(pollInterval);
+                }
+
+            } catch (err) {
+                console.error("Polling error:", err);
+            }
+        }
+    </script>
+</body>
+</html>

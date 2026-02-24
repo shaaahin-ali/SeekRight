@@ -1,6 +1,8 @@
 import time
 import logging
+from datetime import datetime
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException
 from app import models
 from app.database import SessionLocal
@@ -10,38 +12,19 @@ logger = logging.getLogger(__name__)
 
 
 def create_session(db: Session, data):
-    # Get or create subject
     subject = db.query(models.Subject).filter(
         models.Subject.subject_id == data.subject_id
     ).first()
 
     if not subject:
-        logger.info(f"Subject {data.subject_id} not found. Creating a default one.")
-        subject = models.Subject(
-            subject_id=data.subject_id,
-            subject_name=f"Subject {data.subject_id}",
-            description="Automatically created subject"
-        )
-        db.add(subject)
-        db.commit()
-        db.refresh(subject)
+        raise HTTPException(status_code=404, detail="Subject not found")
 
-    # Get or create user
     user = db.query(models.User).filter(
         models.User.user_id == data.uploaded_by
     ).first()
 
     if not user:
-        logger.info(f"User {data.uploaded_by} not found. Creating a default one.")
-        user = models.User(
-            user_id=data.uploaded_by,
-            name=f"User {data.uploaded_by}",
-            role="teacher",
-            email=f"user{data.uploaded_by}@example.com"
-        )
-        db.add(user)
-        db.commit()
-        db.refresh(user)
+        raise HTTPException(status_code=404, detail="User not found")
 
     existing = db.query(models.Session).filter(
         models.Session.youtube_url == data.youtube_url
@@ -54,12 +37,17 @@ def create_session(db: Session, data):
         subject_id=data.subject_id,
         youtube_url=data.youtube_url,
         uploaded_by=data.uploaded_by,
-        processing_status="PENDING"
+        processing_status=models.ProcessingStatus.PENDING
     )
 
     db.add(new_session)
-    db.commit()
-    db.refresh(new_session)
+    
+    try:
+        db.commit()
+        db.refresh(new_session)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Session with this YouTube URL already exists")
 
     return new_session
 
@@ -79,29 +67,68 @@ def process_session(session_id: int):
     db = SessionLocal()
 
     try:
+        # Fetch with a row lock to prevent concurrent workers processing the same session
         session = db.query(models.Session).filter(
             models.Session.session_id == session_id
-        ).first()
+        ).with_for_update().first()
 
         if not session:
             return
 
-        session.processing_status = "PROCESSING"
+        if session.processing_status == models.ProcessingStatus.COMPLETED:
+            logger.info("Session already COMPLETED. Skipping.")
+            return
+            
+        existing_transcript = db.query(models.Transcript).filter(
+            models.Transcript.session_id == session_id
+        ).first()
+        
+        if existing_transcript:
+            logger.info("Transcript already exists. Skipping.")
+            return
+
+        session.processing_status = models.ProcessingStatus.PROCESSING
+        session.started_at = datetime.utcnow()
         db.commit()
         logger.info(f"Session {session_id} moved to PROCESSING")
 
         # Simulate long-running Whisper task
         time.sleep(5)
 
-        session.processing_status = "COMPLETED"
-        db.commit()
+        with db.begin():
+            # Cascade Safe-Guard: re-fetch the session inside the transaction
+            # to check if it was deleted mid-processing
+            check_session = db.query(models.Session).filter(
+                models.Session.session_id == session_id
+            ).first()
+            
+            if not check_session:
+                logger.warning(f"Session {session_id} was deleted mid-processing. Aborting transcript insertion.")
+                return
+
+            check_session.processing_status = models.ProcessingStatus.COMPLETED
+            check_session.completed_at = datetime.utcnow()
+            db.add(models.Transcript(
+                session_id=session_id,
+                full_text="Dummy transcript text generated.",
+                language="english"
+            ))
+
         logger.info(f"Session {session_id} moved to COMPLETED")
 
     except Exception as e:
         logger.error(f"Error processing session {session_id}: {str(e)}")
-        if session:
-            session.processing_status = "FAILED"
-            db.commit()
+        try:
+            failed_session = db.query(models.Session).filter(
+                models.Session.session_id == session_id
+            ).first()
+            if failed_session:
+                failed_session.processing_status = models.ProcessingStatus.FAILED
+                failed_session.failure_reason = str(e)
+                failed_session.completed_at = datetime.utcnow()
+                db.commit()
+        except Exception:
+            pass
 
     finally:
         db.close()

@@ -1,7 +1,15 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Float, Text
+import enum
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Float, Text, Enum
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from .database import Base
+
+
+class ProcessingStatus(str, enum.Enum):
+    PENDING = "PENDING"
+    PROCESSING = "PROCESSING"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
 
 
 class User(Base):
@@ -32,13 +40,16 @@ class Session(Base):
 
     session_id = Column(Integer, primary_key=True, index=True)
     subject_id = Column(Integer, ForeignKey("SUBJECTS.subject_id"))
-    youtube_url = Column(String, unique=True)
+    youtube_url = Column(String, unique=True, index=True)
     audio_file_name = Column(String)
     transcript_source = Column(String, default="whisper")
     duration = Column(Float)
     uploaded_by = Column(Integer, ForeignKey("USERS.user_id"))
-    processing_status = Column(String, default="PENDING")
+    processing_status = Column(Enum(ProcessingStatus), default=ProcessingStatus.PENDING)
     created_at = Column(DateTime, default=datetime.utcnow)
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    failure_reason = Column(Text, nullable=True)
 
     subject = relationship("Subject", back_populates="sessions")
     uploader = relationship("User", back_populates="sessions")
@@ -49,7 +60,7 @@ class Transcript(Base):
     __tablename__ = "TRANSCRIPTS"
 
     transcript_id = Column(Integer, primary_key=True, index=True)
-    session_id = Column(Integer, ForeignKey("SESSIONS.session_id"))
+    session_id = Column(Integer, ForeignKey("SESSIONS.session_id", ondelete="CASCADE"), unique=True, nullable=False, index=True)
     full_text = Column(Text)
     language = Column(String, default="english")
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -61,8 +72,8 @@ class TranscriptChunk(Base):
     __tablename__ = "TRANSCRIPT_CHUNKS"
 
     chunk_id = Column(Integer, primary_key=True, index=True)
-    session_id = Column(Integer, ForeignKey("SESSIONS.session_id"))
-    subject_id = Column(Integer, ForeignKey("SUBJECTS.subject_id"))
+    session_id = Column(Integer, ForeignKey("SESSIONS.session_id"), index=True)
+    subject_id = Column(Integer, ForeignKey("SUBJECTS.subject_id"), index=True)
     chunk_text = Column(Text, nullable=False)
     start_time = Column(Float)
     end_time = Column(Float)
