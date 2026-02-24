@@ -42,3 +42,28 @@ def create_session(subject_id, youtube_url, audio_file_name, uploaded_by):
 
     db.close()
     return session
+
+
+def get_session_by_url(youtube_url):
+    db = SessionLocal()
+    session = db.query(Session).filter(Session.youtube_url == youtube_url).first()
+    db.close()
+    return session
+
+
+def create_youtube_session(subject_id, youtube_url, uploaded_by):
+    db = SessionLocal()
+
+    session = Session(
+        subject_id=subject_id,
+        youtube_url=youtube_url,
+        audio_file_name=None,
+        uploaded_by=uploaded_by
+    )
+
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+
+    db.close()
+    return session
