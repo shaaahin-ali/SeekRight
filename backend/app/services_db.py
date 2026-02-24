@@ -67,3 +67,41 @@ def create_youtube_session(subject_id, youtube_url, uploaded_by):
 
     db.close()
     return session
+
+
+def save_transcript(session_id, full_text):
+    from .models import Transcript
+
+    db = SessionLocal()
+
+    transcript = Transcript(
+        session_id=session_id,
+        full_text=full_text
+    )
+
+    db.add(transcript)
+    db.commit()
+    db.refresh(transcript)
+
+    db.close()
+    return transcript
+
+def save_chunks(session_id, subject_id, chunks):
+    from .models import TranscriptChunk
+
+    db = SessionLocal()
+
+    for index, chunk in enumerate(chunks):
+        db_chunk = TranscriptChunk(
+            session_id=session_id,
+            subject_id=subject_id,
+            chunk_text=chunk["text"],
+            start_time=chunk["start"],
+            end_time=chunk["end"],
+            chunk_index=index
+        )
+        db.add(db_chunk)
+
+    db.commit()
+    db.close()
+
