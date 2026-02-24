@@ -16,3 +16,8 @@ def add_subject(name: str, description: str):
         "subject_id": subject.subject_id,
         "subject_name": subject.subject_name
     }
+
+
+@app.get("/health")
+def health_check():
+    return {"status": "ok"}
