@@ -26,6 +26,16 @@ class SessionResponse(BaseModel):
     session_id: int
     processing_status: str
 
+    class Config:
+        from_attributes = True
+
+class SessionStatusResponse(BaseModel):
+    session_id: int
+    processing_status: str
+
+    class Config:
+        from_attributes = True
+
 # Query Schemas
 class QueryRequest(BaseModel):
     question: str

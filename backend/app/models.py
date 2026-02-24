@@ -37,6 +37,7 @@ class Session(Base):
     transcript_source = Column(String, default="whisper")
     duration = Column(Float)
     uploaded_by = Column(Integer, ForeignKey("USERS.user_id"))
+    processing_status = Column(String, default="PENDING")
     created_at = Column(DateTime, default=datetime.utcnow)
 
     subject = relationship("Subject", back_populates="sessions")
