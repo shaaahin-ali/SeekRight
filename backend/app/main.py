@@ -7,6 +7,9 @@ from app.routers import auth, session, query
 
 app = FastAPI(title="SeekRight API")
 
+# Create tables
+models.Base.metadata.create_all(bind=engine)
+
 # Include routers
 app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
 app.include_router(session.router, prefix="/api", tags=["Session"])

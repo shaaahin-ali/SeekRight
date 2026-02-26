@@ -8,6 +8,8 @@ from .database import Base
 class ProcessingStatus(str, enum.Enum):
     PENDING = "PENDING"
     PROCESSING = "PROCESSING"
+    TRANSCRIBING = "TRANSCRIBING"
+    CHUNKING = "CHUNKING"
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
 

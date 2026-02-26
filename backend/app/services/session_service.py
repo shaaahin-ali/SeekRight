@@ -48,6 +48,10 @@ def create_session(db: Session, data):
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=400, detail="Session with this YouTube URL already exists")
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error creating session: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
     return new_session
 
@@ -76,7 +80,7 @@ def process_session(session_id: int):
             return
 
         if session.processing_status == models.ProcessingStatus.COMPLETED:
-            logger.info("Session already COMPLETED. Skipping.")
+            logger.info(f"Session {session_id} already COMPLETED. Skipping.")
             return
             
         existing_transcript = db.query(models.Transcript).filter(
@@ -84,7 +88,7 @@ def process_session(session_id: int):
         ).first()
         
         if existing_transcript:
-            logger.info("Transcript already exists. Skipping.")
+            logger.info(f"Transcript already exists for session {session_id}. skipping.")
             return
 
         session.processing_status = models.ProcessingStatus.PROCESSING
@@ -92,43 +96,109 @@ def process_session(session_id: int):
         db.commit()
         logger.info(f"Session {session_id} moved to PROCESSING")
 
-        # Simulate long-running Whisper task
-        time.sleep(5)
+        # 1. TRANSCRIPTION STAGE (with 1 retry)
+        max_retries = 1
+        attempt = 0
+        transcription_result = None
+        
+        session.processing_status = models.ProcessingStatus.TRANSCRIBING
+        db.commit()
+        logger.info(f"Session {session_id} moved to TRANSCRIBING")
 
+        from app.services.transcription_service import transcribe
+        
+        while attempt <= max_retries:
+            try:
+                logger.info(f"Transcription attempt {attempt + 1} for session {session_id}")
+                transcription_result = transcribe(session.youtube_url)
+                break
+            except Exception as e:
+                attempt += 1
+                if attempt > max_retries:
+                    logger.error(f"Transcription failed after {max_retries + 1} attempts: {str(e)}")
+                    raise e
+                logger.warning(f"Transcription attempt {attempt} failed, retrying... Error: {str(e)}")
+
+        full_text = transcription_result["full_text"]
+        language = transcription_result["language"]
+        segments = transcription_result["segments"]
+
+        # 2. CHUNKING STAGE
+        session.processing_status = models.ProcessingStatus.CHUNKING
+        db.commit()
+        logger.info(f"Session {session_id} moved to CHUNKING")
+
+        from app.services.chunk_service import generate_chunks
+        try:
+            chunks_data = generate_chunks(
+                full_text=full_text,
+                segments=segments,
+                session_id=session_id,
+                subject_id=session.subject_id
+            )
+        except Exception as e:
+            logger.error(f"Chunking failed for session {session_id}: {str(e)}")
+            raise e
+
+        # 3. PERSISTENCE STAGE
         with db.begin():
-            # Cascade Safe-Guard: re-fetch the session inside the transaction
-            # to check if it was deleted mid-processing
             check_session = db.query(models.Session).filter(
                 models.Session.session_id == session_id
             ).first()
             
             if not check_session:
-                logger.warning(f"Session {session_id} was deleted mid-processing. Aborting transcript insertion.")
+                logger.warning(f"Session {session_id} was deleted mid-processing. Aborting persistence.")
                 return
+
+            # Persist Transcript
+            db.add(models.Transcript(
+                session_id=session_id,
+                full_text=full_text,
+                language=language
+            ))
+
+            # Persist Chunks
+            for chunk_dict in chunks_data:
+                db.add(models.TranscriptChunk(
+                    session_id=chunk_dict["session_id"],
+                    subject_id=chunk_dict["subject_id"],
+                    chunk_text=chunk_dict["chunk_text"],
+                    start_time=chunk_dict["start_time"],
+                    end_time=chunk_dict["end_time"],
+                    chunk_index=chunk_dict["chunk_index"]
+                ))
 
             check_session.processing_status = models.ProcessingStatus.COMPLETED
             check_session.completed_at = datetime.utcnow()
-            db.add(models.Transcript(
-                session_id=session_id,
-                full_text="Dummy transcript text generated.",
-                language="english"
-            ))
+            
+            if check_session.started_at:
+                duration = (check_session.completed_at - check_session.started_at).total_seconds()
+                check_session.duration = float(duration)
 
         logger.info(f"Session {session_id} moved to COMPLETED")
 
     except Exception as e:
-        logger.error(f"Error processing session {session_id}: {str(e)}")
+        error_msg = str(e)
+        end_time = datetime.utcnow()
+        logger.error(f"Error processing session {session_id}: {error_msg}")
         try:
-            failed_session = db.query(models.Session).filter(
+            # Create a new DB session for error handling to avoid transaction issues
+            error_db = SessionLocal()
+            failed_session = error_db.query(models.Session).filter(
                 models.Session.session_id == session_id
             ).first()
             if failed_session:
                 failed_session.processing_status = models.ProcessingStatus.FAILED
-                failed_session.failure_reason = str(e)
-                failed_session.completed_at = datetime.utcnow()
-                db.commit()
-        except Exception:
-            pass
+                failed_session.failure_reason = error_msg
+                failed_session.completed_at = end_time
+                if failed_session.started_at:
+                    duration = (end_time - failed_session.started_at).total_seconds()
+                    failed_session.duration = float(duration)
+                error_db.commit()
+                logger.info(f"Session {session_id} marked as FAILED in DB (Duration: {failed_session.duration}s).")
+            error_db.close()
+        except Exception as err_log_e:
+            logger.error(f"Critical: Failed to log error state for session {session_id}: {str(err_log_e)}")
 
     finally:
         db.close()
