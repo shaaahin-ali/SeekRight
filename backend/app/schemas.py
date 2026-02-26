@@ -25,6 +25,7 @@ class SessionCreate(BaseModel):
 class SessionResponse(BaseModel):
     session_id: int
     processing_status: str
+    failure_reason: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -32,6 +33,7 @@ class SessionResponse(BaseModel):
 class SessionStatusResponse(BaseModel):
     session_id: int
     processing_status: str
+    failure_reason: Optional[str] = None
 
     class Config:
         from_attributes = True
