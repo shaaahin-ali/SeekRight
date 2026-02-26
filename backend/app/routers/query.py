@@ -3,7 +3,6 @@ from sqlalchemy.orm import Session
 from app.schemas import QueryRequest, QueryResponse
 from app.database import get_db
 from app.models import Session as DBSession, Transcript, TranscriptChunk, ProcessingStatus
-from app.services.chunking_service import ensure_chunks
 from app.services.embedding_service import embed_query
 from app.services.retrieval_service import build_faiss_index, search
 
@@ -26,54 +25,51 @@ async def query_transcript(request: QueryRequest, db: Session = Depends(get_db))
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid context_id format")
 
-    session_record = db.query(DBSession).filter(DBSession.session_id == session_id).first()
+    session_record = db.query(DBSession).filter_by(session_id=session_id).first()
     if not session_record:
         raise HTTPException(status_code=404, detail="Session not found")
         
     if session_record.processing_status != ProcessingStatus.COMPLETED:
-        raise HTTPException(status_code=400, detail="Querying not allowed. Session processing status is not COMPLETED.")
-        
-    transcript = db.query(Transcript).filter(Transcript.session_id == session_id).first()
+        raise HTTPException(status_code=400, detail="Transcript processing not complete")
+
+    transcript = db.query(Transcript).filter_by(session_id=session_id).first()
     if not transcript:
-        raise HTTPException(status_code=404, detail="Transcript not found")
-        
+        # LOUD FAILURE: If session is COMPLETED, transcript MUST exist.
+        logger.error(f"[Critical] Ingestion Error: COMPLETED session {session_id} has no transcript.")
+        raise HTTPException(status_code=500, detail="Internal data integrity error (Missing transcript)")
+
     if not transcript.full_text or not transcript.full_text.strip():
-        logger.info(f"[Query] context={session_id} chunk_count=0 empty transcript.")
-        return QueryResponse(answer="Safe failure: Transcript is empty.", sources=[])
-        
-    # Concurrency-safe lazy chunking with mandatory transaction boundary
-    # No silent swallowing of exceptions: failures propagate to API layer exactly as requested.
-    with db.begin():
-        ensure_chunks(db, session_id, session_record.subject_id, transcript.full_text)
+        logger.info(f"[Query] context={session_id} empty transcript.")
+        return QueryResponse(answer="No relevant content found in transcript.", sources=[])
     
-    # Reload chunks after confirmed transaction commit
+    # REFEACTOR: Retrieval is strictly read-only. 
+    # Lazy chunking (ensure_chunks) is REMOVED.
     chunks = db.query(TranscriptChunk).filter(TranscriptChunk.session_id == session_id).order_by(TranscriptChunk.chunk_index).all()
     chunk_count = len(chunks)
     
     if not chunks:
-        logger.info(f"[Query] context={session_id} chunk_count={chunk_count} no chunks.")
-        return QueryResponse(answer="No relevant content found in transcript.", sources=[])
-        
+        # LOUD FAILURE: If session is COMPLETED, chunks MUST exist.
+        logger.error(f"[Critical] Ingestion Error: COMPLETED session {session_id} has no chunks.")
+        raise HTTPException(status_code=500, detail="Internal data integrity error (Missing chunks)")
+
     if chunk_count > 2000:
-        logger.warning(f"[Query] context={session_id} chunk_count={chunk_count} memory safety guard triggered.")
+        logger.warning(f"[Query] context={session_id} memory safety guard triggered ({chunk_count} chunks).")
         raise HTTPException(status_code=413, detail="Transcript too large for memory processing")
-        
+
     chunk_texts = [c.chunk_text for c in chunks]
     index, _ = build_faiss_index(chunk_texts)
     
-    query_vector = embed_query(request.question)
-    
     # Explicit threshold (1.5) for audit transparency
-    valid_results, top_distance = search(index, query_vector, top_k=5, threshold=1.5)
+    valid_results, top_distance = search(index, embed_query(request.question), threshold=1.5)
     
     latency_ms = (time.time() - start_time) * 1000
-    logger.info(f"[Query] context={session_id} chunk_count={chunk_count} top_distance={top_distance:.3f} latency_ms={latency_ms:.1f}ms query='{request.question}'")
+    logger.info(f"[Query] context={session_id} chunk_count={chunk_count} top_dist={top_distance:.3f} lat_ms={latency_ms:.1f}ms query='{request.question}'")
     
     if not valid_results:
         return QueryResponse(answer="No relevant content found in transcript.", sources=[])
         
     # STRICT ANSWER CONSTRUCTION
-    # Strategy: Filtered by similarity threshold, then returned in narrative order (enumerated).
+    # Strategy: Filtered by similarity threshold, then returned in narrative order (O(n) map).
     valid_indices = {idx for dist, idx in valid_results}
     dist_map = {idx: dist for dist, idx in valid_results}
     
