@@ -1,0 +1,5 @@
+server_log.txt
+server_log_utf8.txt
+*.db
+*.db-wal
+*.db-shm
