@@ -13,4 +13,8 @@ faiss_index/
 *stress*
 *cal*
 *semantic*
+server_log.txt
+server_log_utf8.txt
+*.db-wal
+*.db-shm
 
