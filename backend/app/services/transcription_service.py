@@ -15,11 +15,24 @@ logger = logging.getLogger(__name__)
 model = whisper.load_model("base")
 
 def check_ffmpeg_installed() -> bool:
-    """Checks if ffmpeg is available in the system PATH."""
+    """Checks if ffmpeg is available in the system PATH and logs results."""
     try:
-        subprocess.run(['ffmpeg', '-version'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        # Check ffmpeg
+        ff_res = subprocess.run(['ffmpeg', '-version'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if ff_res.returncode == 0:
+            logger.info("FFmpeg detected successfully.")
+        
+        # Check ffprobe (Whisper needs both)
+        fp_res = subprocess.run(['ffprobe', '-version'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if fp_res.returncode == 0:
+            logger.info("FFprobe detected successfully.")
+            
         return True
-    except (FileNotFoundError, subprocess.SubprocessError):
+    except FileNotFoundError:
+        logger.error("FFmpeg/FFprobe NOT FOUND in system PATH. Please ensure they are installed and added to PATH.")
+        return False
+    except Exception as e:
+        logger.error(f"Unexpected error checking FFmpeg: {str(e)}")
         return False
 
 def transcribe(youtube_url: str) -> Dict[str, Any]:

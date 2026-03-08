@@ -5,6 +5,7 @@ from app.database import get_db
 from app.models import Session as DBSession, Transcript, TranscriptChunk, ProcessingStatus
 from app.services.embedding_service import embed_query
 from app.services.retrieval_service import build_faiss_index, search
+from app.services.llm_service import generate_answer
 
 import time
 import logging
@@ -58,12 +59,33 @@ async def query_transcript(request: QueryRequest, db: Session = Depends(get_db))
 
     chunk_texts = [c.chunk_text for c in chunks]
     index, _ = build_faiss_index(chunk_texts)
-    
-    # Explicit threshold (1.5) for audit transparency
-    valid_results, top_distance = search(index, embed_query(request.question), threshold=1.5)
-    
+
+    query_vector = embed_query(request.question)
+
+    if len(query_vector.shape) == 1:
+        query_vector = query_vector.reshape(1, -1)
+
+    valid_results, top_distance = search(index, query_vector)
+
+    logger.info(f"DEBUG VALID_RESULTS: {valid_results}")
+    logger.info(f"DEBUG TOP_DISTANCE: {top_distance}")
+    logger.info(f"DEBUG CHUNK_COUNT: {chunk_count}")
+
     latency_ms = (time.time() - start_time) * 1000
-    logger.info(f"[Query] context={session_id} chunk_count={chunk_count} top_dist={top_distance:.3f} lat_ms={latency_ms:.1f}ms query='{request.question}'")
+
+    safe_top_distance = (
+        f"{top_distance:.3f}"
+        if isinstance(top_distance, (int, float))
+        else "N/A"
+    )
+
+    logger.info(
+        f"[Query] context={session_id} "
+        f"chunk_count={chunk_count} "
+        f"top_dist={safe_top_distance} "
+        f"lat_ms={latency_ms:.1f}ms "
+        f"query='{request.question}'"
+    )
     
     if not valid_results:
         return QueryResponse(answer="No relevant content found in transcript.", sources=[])
@@ -84,6 +106,15 @@ async def query_transcript(request: QueryRequest, db: Session = Depends(get_db))
                 selected_chunks.append(chunk.chunk_text)
                 sources.append(f"chunk_index_{chunk.chunk_index}_dist_{dist_map[idx]:.3f}")
             
-    answer = "\n\n".join(selected_chunks)
-    
-    return QueryResponse(answer=answer, sources=sources)
+    context_text = "\n\n".join(selected_chunks)
+
+    try:
+        llm_answer = await generate_answer(
+            question=request.question,
+            context=context_text
+        )
+    except Exception as e:
+        logger.error(f"[Query] LLM Error: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"LLM integration error: {str(e)}")
+
+    return QueryResponse(answer=llm_answer, sources=sources)

@@ -66,12 +66,10 @@ def get_session_status(db: Session, session_id: int):
 
     return session
 
-
 def process_session(session_id: int):
     db = SessionLocal()
 
     try:
-        # Fetch with a row lock to prevent concurrent workers processing the same session
         session = db.query(models.Session).filter(
             models.Session.session_id == session_id
         ).with_for_update().first()
@@ -82,31 +80,36 @@ def process_session(session_id: int):
         if session.processing_status == models.ProcessingStatus.COMPLETED:
             logger.info(f"Session {session_id} already COMPLETED. Skipping.")
             return
-            
+
         existing_transcript = db.query(models.Transcript).filter(
             models.Transcript.session_id == session_id
         ).first()
-        
+
         if existing_transcript:
-            logger.info(f"Transcript already exists for session {session_id}. skipping.")
+            logger.info(f"Transcript already exists for session {session_id}. Skipping.")
             return
 
+        # ------------------------
+        # PROCESSING STAGE
+        # ------------------------
         session.processing_status = models.ProcessingStatus.PROCESSING
         session.started_at = datetime.utcnow()
         db.commit()
         logger.info(f"Session {session_id} moved to PROCESSING")
 
-        # 1. TRANSCRIPTION STAGE (with 1 retry)
-        max_retries = 1
-        attempt = 0
-        transcription_result = None
-        
+        # ------------------------
+        # TRANSCRIPTION STAGE
+        # ------------------------
         session.processing_status = models.ProcessingStatus.TRANSCRIBING
         db.commit()
         logger.info(f"Session {session_id} moved to TRANSCRIBING")
 
         from app.services.transcription_service import transcribe
-        
+
+        max_retries = 1
+        attempt = 0
+        transcription_result = None
+
         while attempt <= max_retries:
             try:
                 logger.info(f"Transcription attempt {attempt + 1} for session {session_id}")
@@ -123,57 +126,62 @@ def process_session(session_id: int):
         language = transcription_result["language"]
         segments = transcription_result["segments"]
 
-        # 2. CHUNKING STAGE
+        # ------------------------
+        # CHUNKING STAGE
+        # ------------------------
         session.processing_status = models.ProcessingStatus.CHUNKING
         db.commit()
         logger.info(f"Session {session_id} moved to CHUNKING")
 
         from app.services.chunk_service import generate_chunks
-        try:
-            chunks_data = generate_chunks(
-                full_text=full_text,
-                segments=segments,
-                session_id=session_id,
-                subject_id=session.subject_id
-            )
-        except Exception as e:
-            logger.error(f"Chunking failed for session {session_id}: {str(e)}")
-            raise e
 
-        # 3. PERSISTENCE STAGE
-        with db.begin():
-            check_session = db.query(models.Session).filter(
-                models.Session.session_id == session_id
-            ).first()
-            
-            if not check_session:
-                logger.warning(f"Session {session_id} was deleted mid-processing. Aborting persistence.")
-                return
+        chunks_data = generate_chunks(
+            full_text=full_text,
+            segments=segments,
+            session_id=session_id,
+            subject_id=session.subject_id
+        )
 
-            # Persist Transcript
-            db.add(models.Transcript(
-                session_id=session_id,
-                full_text=full_text,
-                language=language
+        # ------------------------
+        # PERSISTENCE STAGE (atomic via single commit)
+        # ------------------------
+
+        check_session = db.query(models.Session).filter(
+            models.Session.session_id == session_id
+        ).first()
+
+        if not check_session:
+            logger.warning(f"Session {session_id} deleted mid-processing. Aborting.")
+            return
+
+        # Add Transcript
+        db.add(models.Transcript(
+            session_id=session_id,
+            full_text=full_text,
+            language=language
+        ))
+
+        # Add Chunks
+        for chunk_dict in chunks_data:
+            db.add(models.TranscriptChunk(
+                session_id=chunk_dict["session_id"],
+                subject_id=chunk_dict["subject_id"],
+                chunk_text=chunk_dict["chunk_text"],
+                start_time=chunk_dict["start_time"],
+                end_time=chunk_dict["end_time"],
+                chunk_index=chunk_dict["chunk_index"]
             ))
 
-            # Persist Chunks
-            for chunk_dict in chunks_data:
-                db.add(models.TranscriptChunk(
-                    session_id=chunk_dict["session_id"],
-                    subject_id=chunk_dict["subject_id"],
-                    chunk_text=chunk_dict["chunk_text"],
-                    start_time=chunk_dict["start_time"],
-                    end_time=chunk_dict["end_time"],
-                    chunk_index=chunk_dict["chunk_index"]
-                ))
+        # Finalize session
+        check_session.processing_status = models.ProcessingStatus.COMPLETED
+        check_session.completed_at = datetime.utcnow()
 
-            check_session.processing_status = models.ProcessingStatus.COMPLETED
-            check_session.completed_at = datetime.utcnow()
-            
-            if check_session.started_at:
-                duration = (check_session.completed_at - check_session.started_at).total_seconds()
-                check_session.duration = float(duration)
+        if check_session.started_at:
+            duration = (check_session.completed_at - check_session.started_at).total_seconds()
+            check_session.duration = float(duration)
+
+        # 🔥 Single commit for transcript + chunks + completed status
+        db.commit()
 
         logger.info(f"Session {session_id} moved to COMPLETED")
 
@@ -181,22 +189,27 @@ def process_session(session_id: int):
         error_msg = str(e)
         end_time = datetime.utcnow()
         logger.error(f"Error processing session {session_id}: {error_msg}")
+
         try:
-            # Create a new DB session for error handling to avoid transaction issues
             error_db = SessionLocal()
             failed_session = error_db.query(models.Session).filter(
                 models.Session.session_id == session_id
             ).first()
+
             if failed_session:
                 failed_session.processing_status = models.ProcessingStatus.FAILED
                 failed_session.failure_reason = error_msg
                 failed_session.completed_at = end_time
+
                 if failed_session.started_at:
                     duration = (end_time - failed_session.started_at).total_seconds()
                     failed_session.duration = float(duration)
+
                 error_db.commit()
-                logger.info(f"Session {session_id} marked as FAILED in DB (Duration: {failed_session.duration}s).")
+                logger.info(f"Session {session_id} marked as FAILED.")
+
             error_db.close()
+
         except Exception as err_log_e:
             logger.error(f"Critical: Failed to log error state for session {session_id}: {str(err_log_e)}")
 
