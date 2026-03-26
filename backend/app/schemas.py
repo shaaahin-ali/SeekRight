@@ -38,6 +38,17 @@ class SessionStatusResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class SessionDetailsResponse(BaseModel):
+    session_id: int
+    processing_status: str
+    youtube_url: str
+    summary: Optional[str] = None
+    faqs: Optional[str] = None
+    full_text: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
 class Message(BaseModel):
     role: str
     content: str

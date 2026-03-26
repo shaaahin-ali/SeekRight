@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, User, Sparkles, BookOpen, Activity } from 'lucide-react';
+import { Send, User, Sparkles, BookOpen, Activity, Play, FileText } from 'lucide-react';
 
 const WELCOME_MESSAGE = {
     role: 'assistant',
@@ -9,45 +9,27 @@ const WELCOME_MESSAGE = {
 };
 
 const ChatInterface = ({ sessionId }) => {
-    const [messages, setMessages] = useState([WELCOME_MESSAGE]);
+    const [messages, setMessages] = useState(() => {
+        if (sessionId) {
+            try {
+                const saved = localStorage.getItem(`seekright_chat_${sessionId}`);
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+                }
+            } catch(e) {}
+        }
+        return [WELCOME_MESSAGE];
+    });
     const [input, setInput] = useState('');
     const [isTyping, setIsTyping] = useState(false);
+    const [sessionDetails, setSessionDetails] = useState(null);
     const messagesEndRef = useRef(null);
     const prevSessionIdRef = useRef(sessionId);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     };
-
-    // Load chat history when sessionId changes (including first mount)
-    useEffect(() => {
-        // Save the previous session's chat before switching
-        if (prevSessionIdRef.current && prevSessionIdRef.current !== sessionId) {
-            // messages state still holds previous session's data at this point
-            // but we already saved on every message change (below), so no action needed
-        }
-
-        // Load the new session's chat from localStorage
-        const storageKey = `seekright_chat_${sessionId}`;
-        try {
-            const saved = localStorage.getItem(storageKey);
-            if (saved) {
-                const parsed = JSON.parse(saved);
-                if (Array.isArray(parsed) && parsed.length > 0) {
-                    setMessages(parsed);
-                } else {
-                    setMessages([WELCOME_MESSAGE]);
-                }
-            } else {
-                setMessages([WELCOME_MESSAGE]);
-            }
-        } catch {
-            setMessages([WELCOME_MESSAGE]);
-        }
-
-        setInput('');
-        prevSessionIdRef.current = sessionId;
-    }, [sessionId]);
 
     // Save chat history to localStorage whenever messages change
     useEffect(() => {
@@ -60,6 +42,41 @@ const ChatInterface = ({ sessionId }) => {
             }
         }
     }, [messages, sessionId]);
+
+    // Fetch session details for Summary, FAQs, and Links
+    useEffect(() => {
+        if (!sessionId) return;
+
+        const fetchDetails = async () => {
+            try {
+                const res = await fetch(`/api/session/${sessionId}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    setSessionDetails(data);
+                    
+                    setMessages(prev => {
+                        const newMsgs = [...prev];
+                        // Safely update the welcome message summary if it's still the first message
+                        if (newMsgs.length > 0 && newMsgs[0].role === 'assistant' && (newMsgs[0].content === WELCOME_MESSAGE.content || newMsgs[0].content.includes('Analysis complete!'))) {
+                            if (data.summary) {
+                                let parsedFaqs = [];
+                                try { parsedFaqs = data.faqs ? JSON.parse(data.faqs) : []; } catch(e) {}
+                                newMsgs[0] = {
+                                    ...newMsgs[0],
+                                    content: `Analysis complete! Here is a perfect, concise summary of the video:\n\n${data.summary}\n\nAsk me any questions below!`,
+                                    faqs: parsedFaqs
+                                };
+                            }
+                        }
+                        return newMsgs;
+                    });
+                }
+            } catch (err) {
+                console.error("Failed to fetch session details", err);
+            }
+        };
+        fetchDetails();
+    }, [sessionId]);
 
     useEffect(() => {
         scrollToBottom();
@@ -140,6 +157,18 @@ const ChatInterface = ({ sessionId }) => {
                         </div>
                     </div>
                 </div>
+
+                {/* Video & Transcript Action Links */}
+                {sessionDetails && sessionDetails.youtube_url && (
+                    <div style={{ display: 'flex', gap: '12px' }}>
+                        <a href={sessionDetails.youtube_url} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', padding: '6px 12px', borderRadius: '20px', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', textDecoration: 'none', fontWeight: 500, border: '1px solid rgba(239, 68, 68, 0.2)', transition: 'all 0.2s' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.15)'} onMouseOut={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'}>
+                            <Play size={14} /> View Video
+                        </a>
+                        <a href={`/api/session/${sessionId}/transcript/raw`} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', padding: '6px 12px', borderRadius: '20px', background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-main)', textDecoration: 'none', fontWeight: 500, border: '1px solid var(--glass-border)', transition: 'all 0.2s' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'} onMouseOut={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'}>
+                            <FileText size={14} /> Full Transcript
+                        </a>
+                    </div>
+                )}
             </div>
 
             {/* Custom Scrollbar Styles for the Messages Area */}
@@ -208,7 +237,32 @@ const ChatInterface = ({ sessionId }) => {
                                     {/* Glass reflection top-edge highlight */}
                                     <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '1px', background: 'linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0) 100%)' }} />
 
-                                    {msg.content}
+                                    <div style={{ whiteSpace: 'pre-wrap' }}>
+                                        {msg.content}
+                                    </div>
+
+                                    {/* Render FAQs if any on the welcome message */}
+                                    {msg.faqs && msg.faqs.length > 0 && (
+                                        <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px' }}>Frequently Asked Questions:</div>
+                                            {msg.faqs.map((faq, fidx) => (
+                                                <button 
+                                                    key={fidx}
+                                                    onClick={() => setInput(faq)}
+                                                    style={{
+                                                        textAlign: 'left', padding: '10px 14px', borderRadius: '12px',
+                                                        background: 'rgba(0, 210, 255, 0.05)', border: '1px solid rgba(0, 210, 255, 0.2)',
+                                                        color: 'var(--accent-ice-blue)', fontSize: '0.9rem', cursor: 'pointer',
+                                                        transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: '8px'
+                                                    }}
+                                                    onMouseOver={(e) => e.currentTarget.style.background = 'rgba(0, 210, 255, 0.1)'}
+                                                    onMouseOut={(e) => e.currentTarget.style.background = 'rgba(0, 210, 255, 0.05)'}
+                                                >
+                                                    <Sparkles size={14} style={{ flexShrink: 0 }} /> <span>{faq}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* Sources Display */}

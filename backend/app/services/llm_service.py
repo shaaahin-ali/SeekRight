@@ -51,3 +51,39 @@ Answer:
     data = response.json()
 
     return data["choices"][0]["message"]["content"]
+
+def generate_summary_and_faqs_sync(text: str) -> dict:
+    import json
+    import httpx
+    
+    headers = {
+        "Authorization": f"Bearer {MISTRAL_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    prompt = f"""
+Analyze the following video transcript.
+1. Write a core topic title (maximum 4 to 8 words) describing the main subject of the video. DO NOT write a full sentence. Just the core topic name.
+2. Generate exactly 3 frequently asked questions (FAQs) that users might ask based on this transcript.
+    
+Provide the output in STRICT JSON format with exactly two keys: "summary" (string) and "faqs" (list of strings).
+Do NOT include any markdown blocks (like ```json), just the raw JSON object.
+
+Transcript:
+{text[:10000]}
+"""
+    
+    payload = {
+        "model": MODEL_NAME,
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.2
+    }
+    
+    with httpx.Client(timeout=60.0) as client:
+        response = client.post(MISTRAL_URL, headers=headers, json=payload)
+        response.raise_for_status()
+        data = response.json()
+        
+    result_str = data["choices"][0]["message"]["content"]
+    result_str = result_str.replace("```json", "").replace("```", "").strip()
+    return json.loads(result_str)

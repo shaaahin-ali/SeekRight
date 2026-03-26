@@ -5,6 +5,40 @@ import { LogOut, Youtube, Loader2, CheckCircle2, History, Plus, ArrowLeft } from
 import ChatInterface from '../components/ChatInterface';
 import QueriesView from '../components/QueriesView';
 
+const HistoryItem = ({ item, onClick, getThumbnail }) => {
+    const [summary, setSummary] = useState(item.youtube_url);
+    const thumbnail = getThumbnail(item.youtube_url);
+    
+    useEffect(() => {
+        fetch(`/api/session/${item.session_id}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.summary) {
+                    setSummary(data.summary);
+                }
+            })
+            .catch(() => {});
+    }, [item.session_id]);
+
+    return (
+        <div style={{ padding: '12px', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--glass-border)', display: 'flex', alignItems: 'center', gap: '14px', cursor: 'pointer', transition: 'all 0.2s' }}
+            className="hover-bg-surface hover-border-blue"
+            onClick={onClick}
+        >
+            {thumbnail && (
+                <img src={thumbnail} alt="Video thumbnail" style={{ width: '80px', height: '45px', borderRadius: '8px', objectFit: 'cover', flexShrink: 0, border: '1px solid rgba(255,255,255,0.08)' }} onError={(e) => { e.target.style.display = 'none'; }} />
+            )}
+            <div style={{ flex: 1, overflow: 'hidden' }}>
+                <div style={{ fontWeight: 500, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', color: 'var(--text-main)' }}>{summary}</div>
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '4px' }}>Session #{item.session_id} • {new Date(item.date).toLocaleDateString()}</div>
+            </div>
+            <div style={{ color: 'var(--accent-ice-blue)', fontSize: '0.85rem', fontWeight: 600, padding: '4px 8px', borderRadius: '16px', background: 'rgba(0, 210, 255, 0.1)', flexShrink: 0 }}>
+                Query
+            </div>
+        </div>
+    );
+};
+
 const Home = () => {
     const [activeTab, setActiveTab] = useState('Dashboard');
     const navigate = useNavigate();
@@ -180,32 +214,16 @@ const Home = () => {
                             </h3>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                                 {history.map((item, idx) => {
-                                    const thumbnail = getYouTubeThumbnail(item.youtube_url);
                                     return (
-                                        <div key={idx} style={{ padding: '12px', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--glass-border)', display: 'flex', alignItems: 'center', gap: '14px', cursor: 'pointer', transition: 'all 0.2s' }}
-                                            className="hover-bg-surface hover-border-blue"
+                                        <HistoryItem 
+                                            key={idx} 
+                                            item={item} 
                                             onClick={() => {
                                                 setActiveSessionId(item.session_id);
                                                 setSessionStatus('COMPLETED');
-                                            }}
-                                        >
-                                            {/* YouTube Thumbnail */}
-                                            {thumbnail && (
-                                                <img
-                                                    src={thumbnail}
-                                                    alt="Video thumbnail"
-                                                    style={{ width: '80px', height: '45px', borderRadius: '8px', objectFit: 'cover', flexShrink: 0, border: '1px solid rgba(255,255,255,0.08)' }}
-                                                    onError={(e) => { e.target.style.display = 'none'; }}
-                                                />
-                                            )}
-                                            <div style={{ flex: 1, overflow: 'hidden' }}>
-                                                <div style={{ fontWeight: 500, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{item.youtube_url}</div>
-                                                <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '4px' }}>Session #{item.session_id} • {new Date(item.date).toLocaleDateString()}</div>
-                                            </div>
-                                            <div style={{ color: 'var(--accent-ice-blue)', fontSize: '0.85rem', fontWeight: 600, padding: '4px 8px', borderRadius: '16px', background: 'rgba(0, 210, 255, 0.1)', flexShrink: 0 }}>
-                                                Query
-                                            </div>
-                                        </div>
+                                            }} 
+                                            getThumbnail={getYouTubeThumbnail}
+                                        />
                                     );
                                 })}
                             </div>
@@ -239,7 +257,7 @@ const Home = () => {
                                 >
                                     <ArrowLeft size={16} /> Back to Sessions
                                 </button>
-                                <ChatInterface sessionId={activeSessionId} />
+                                <ChatInterface key={activeSessionId} sessionId={activeSessionId} />
                             </motion.div>
                         )}
                     </AnimatePresence>

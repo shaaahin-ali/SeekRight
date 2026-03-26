@@ -154,11 +154,24 @@ def process_session(session_id: int):
             logger.warning(f"Session {session_id} deleted mid-processing. Aborting.")
             return
 
+        summary = None
+        faqs = None
+        try:
+            from app.services.llm_service import generate_summary_and_faqs_sync
+            import json
+            parsed = generate_summary_and_faqs_sync(full_text)
+            summary = parsed.get("summary")
+            faqs = json.dumps(parsed.get("faqs", []))
+        except Exception as e:
+            logger.error(f"Failed to generate summary/faqs: {e}")
+
         # Add Transcript
         db.add(models.Transcript(
             session_id=session_id,
             full_text=full_text,
-            language=language
+            language=language,
+            summary=summary,
+            faqs=faqs
         ))
 
         # Add Chunks

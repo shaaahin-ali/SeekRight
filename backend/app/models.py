@@ -64,6 +64,8 @@ class Transcript(Base):
     transcript_id = Column(Integer, primary_key=True, index=True)
     session_id = Column(Integer, ForeignKey("SESSIONS.session_id", ondelete="CASCADE"), unique=True, nullable=False, index=True)
     full_text = Column(Text)
+    summary = Column(Text, nullable=True)
+    faqs = Column(Text, nullable=True)
     language = Column(String, default="english")
     created_at = Column(DateTime, default=datetime.utcnow)
 
