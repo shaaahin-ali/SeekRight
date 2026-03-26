@@ -15,12 +15,40 @@ logger = logging.getLogger(__name__)
 model = whisper.load_model("base")
 
 def check_ffmpeg_installed() -> bool:
-    """Checks if ffmpeg is available in the system PATH."""
+    """Checks if ffmpeg is available in the system PATH or common installation locations."""
+    # 1. Check if it's already in the PATH
     try:
         subprocess.run(['ffmpeg', '-version'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return True
     except (FileNotFoundError, subprocess.SubprocessError):
-        return False
+        pass
+
+    # 2. Check common installation paths on Windows
+    common_paths = [
+        r"C:\ffmpeg\bin\ffmpeg.exe",
+        r"C:\Program Files\ffmpeg\bin\ffmpeg.exe",
+        os.path.join(os.environ.get("LOCALAPPDATA", ""), "Microsoft", "WinGet", "Packages", "Gyan.FFmpeg_Microsoft.Winget.Source_8.0.1", "ffmpeg-8.0.1-full_build", "bin", "ffmpeg.exe"),
+    ]
+    
+    # Also check the user's Downloads folder if we saw it there earlier
+    user_profile = os.environ.get("USERPROFILE", "")
+    if user_profile:
+        # We'll search for any ffmpeg.exe in the Downloads folder (shallow search)
+        downloads_path = os.path.join(user_profile, "Downloads")
+        if os.path.exists(downloads_path):
+            for root, dirs, files in os.walk(downloads_path):
+                if "ffmpeg.exe" in files:
+                    ffmpeg_path = os.path.join(root, "ffmpeg.exe")
+                    # Add this to the current process PATH
+                    bin_dir = os.path.dirname(ffmpeg_path)
+                    os.environ["PATH"] = bin_dir + os.pathsep + os.environ["PATH"]
+                    logger.info(f"Found FFmpeg in downloads and added to PATH: {ffmpeg_path}")
+                    return True
+                # Limit search depth for performance
+                if root.count(os.sep) - downloads_path.count(os.sep) >= 2:
+                    del dirs[:]
+
+    return False
 
 def transcribe(youtube_url: str) -> Dict[str, Any]:
     temp_dir = tempfile.mkdtemp()
