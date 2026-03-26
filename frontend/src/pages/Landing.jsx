@@ -1,143 +1,251 @@
-import React, { useState } from 'react';
+import React from 'react';
+import { motion } from 'framer-motion';
+import { Circle, Youtube, Brain, FileText, Zap, MessageSquare, Play } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowRight, Sparkles, Shield, Zap } from 'lucide-react';
 
-const Landing = () => {
-    const navigate = useNavigate();
-    const [showDetails, setShowDetails] = useState(false);
-
+// ---------- ElegantShape ----------
+function ElegantShape({ className, delay = 0, width = 400, height = 100, rotate = 0, gradient = 'from-white/[0.08]' }) {
     return (
         <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.5 }}
-            style={{
-                minHeight: '100vh',
-                display: 'flex',
-                flexDirection: 'column',
-            }}
+            initial={{ opacity: 0, y: -150, rotate: rotate - 15 }}
+            animate={{ opacity: 1, y: 0, rotate: rotate }}
+            transition={{ duration: 2.4, delay, ease: [0.23, 0.86, 0.39, 0.96], opacity: { duration: 1.2 } }}
+            className={`absolute ${className}`}
         >
-            {/* Simple Navigation */}
-            <header className="container" style={{ padding: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'var(--accent-ice-blue)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#000', fontWeight: 'bold' }}>
-                        SR
-                    </div>
-                    <span style={{ fontSize: '1.2rem', fontWeight: 600, letterSpacing: '0.5px' }}>SeekRight</span>
-                </div>
-                <div>
-                    <button className="btn btn-ghost" onClick={() => navigate('/login')}>Sign In</button>
-                </div>
-            </header>
-
-            {/* Hero Section */}
-            <main className="container" style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center', position: 'relative' }}>
-
-                {/* Decorative elements */}
-                <motion.div
-                    className="animate-pulse-glow"
-                    style={{ position: 'absolute', top: '10%', right: '20%', color: 'var(--accent-ice-blue)' }}
-                >
-                    <Sparkles size={24} />
-                </motion.div>
-
-                <motion.div
-                    initial={{ y: 20, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    transition={{ duration: 0.6, delay: 0.1 }}
-                >
-                    <span style={{ display: 'inline-block', padding: '6px 12px', borderRadius: '20px', background: 'rgba(0, 210, 255, 0.1)', color: 'var(--accent-ice-blue)', fontSize: '0.85rem', fontWeight: 600, marginBottom: '24px' }}>
-                        Next-Generation Search
-                    </span>
-                </motion.div>
-
-                <motion.h1
-                    initial={{ y: 20, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    transition={{ duration: 0.6, delay: 0.2 }}
-                    style={{ fontSize: 'clamp(2.5rem, 6vw, 4.5rem)', fontWeight: 700, marginBottom: '24px', maxWidth: '800px', lineHeight: 1.1 }}
-                >
-                    Discover the truth with <span className="text-gradient">SeekRight</span>
-                </motion.h1>
-
-                <motion.p
-                    initial={{ y: 20, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    transition={{ duration: 0.6, delay: 0.3 }}
-                    style={{ color: 'var(--text-muted)', fontSize: 'clamp(1rem, 2vw, 1.25rem)', maxWidth: '600px', marginBottom: '40px' }}
-                >
-                    Enterprise-grade analysis, lightning-fast queries, and actionable insights powered by cutting edge AI.
-                </motion.p>
-
-                <motion.div
-                    initial={{ y: 20, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    transition={{ duration: 0.6, delay: 0.4 }}
-                    style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', justifyContent: 'center' }}
-                >
-                    <button className="btn btn-primary" onClick={() => setShowDetails(!showDetails)} style={{ height: '48px', padding: '0 32px' }}>
-                        Learn More <ArrowRight size={18} />
-                    </button>
-                    <button className="btn btn-outline" onClick={() => navigate('/login')} style={{ height: '48px', padding: '0 32px' }}>
-                        Start
-                    </button>
-                </motion.div>
-
-                {/* Details Section */}
-                <AnimatePresence>
-                    {showDetails && (
-                        <motion.div
-                            initial={{ opacity: 0, height: 0, y: 20 }}
-                            animate={{ opacity: 1, height: 'auto', y: 0 }}
-                            exit={{ opacity: 0, height: 0, y: -20 }}
-                            style={{ overflow: 'hidden', marginTop: '32px', maxWidth: '800px', textAlign: 'left' }}
-                        >
-                            <div className="glass-panel" style={{ padding: '32px' }}>
-                                <h3 style={{ fontSize: '1.5rem', marginBottom: '16px', color: 'var(--accent-ice-blue)' }}>How SeekRight Works</h3>
-                                <p style={{ color: 'var(--text-muted)', marginBottom: '16px', lineHeight: '1.6' }}>
-                                    SeekRight uses advanced AI models to seamlessly transcribe lengthy YouTube videos. Once transcribed, our intelligence engine chunks and embeddings the transcript, allowing you to ask natural language questions and get precise, sourced answers instantly.
-                                </p>
-                                <ul style={{ color: 'var(--text-muted)', paddingLeft: '20px', lineHeight: '1.6', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                    <li><strong>1. Ingest:</strong> Paste a YouTube URL. We extract the audio.</li>
-                                    <li><strong>2. Transcribe:</strong> Our models convert speech to text with high accuracy.</li>
-                                    <li><strong>3. Search & Chat:</strong> Stop watching hours of video. Just ask what you need to know.</li>
-                                </ul>
-                            </div>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
-
-                {/* Feature Cards Showcase */}
-                <motion.div
-                    initial={{ y: 40, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    transition={{ duration: 0.8, delay: 0.6 }}
-                    style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '24px', width: '100%', marginTop: '80px', textAlign: 'left' }}
-                >
-                    {[
-                        { icon: <Zap size={24} color="var(--accent-ice-blue)" />, title: 'Lightning Fast', desc: 'Real-time query processing.' },
-                        { icon: <Shield size={24} color="var(--accent-ice-blue)" />, title: 'Enterprise Secure', desc: 'Bank-grade data protection.' },
-                        { icon: <Sparkles size={24} color="var(--accent-ice-blue)" />, title: 'AI Powered', desc: 'Advanced language models.' }
-                    ].map((feature, i) => (
-                        <div key={i} className="glass-panel" style={{ padding: '24px' }}>
-                            <div style={{ marginBottom: '16px', width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(0, 210, 255, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                {feature.icon}
-                            </div>
-                            <h3 style={{ fontSize: '1.25rem', marginBottom: '8px' }}>{feature.title}</h3>
-                            <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem' }}>{feature.desc}</p>
-                        </div>
-                    ))}
-                </motion.div>
-
-            </main>
-
-            <footer className="container" style={{ padding: '32px 24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: 'auto' }}>
-                © {new Date().getFullYear()} SeekRight. All rights reserved.
-            </footer>
+            <motion.div
+                animate={{ y: [0, 15, 0] }}
+                transition={{ duration: 12, repeat: Infinity, ease: 'easeInOut' }}
+                style={{ width, height }}
+                className="relative"
+            >
+                <div className={`absolute inset-0 rounded-full bg-gradient-to-r to-transparent ${gradient} backdrop-blur-[2px] border-2 border-white/[0.15] shadow-[0_8px_32px_0_rgba(255,255,255,0.1)] after:absolute after:inset-0 after:rounded-full after:bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.2),transparent_70%)]`} />
+            </motion.div>
         </motion.div>
     );
-};
+}
 
-export default Landing;
+// ---------- Bento Grid ----------
+const seekrightFeatures = [
+    {
+        title: 'YouTube Transcription',
+        meta: 'AI-powered',
+        description: 'Automatically transcribes any YouTube video in seconds using cutting-edge speech recognition.',
+        icon: <Youtube className="w-4 h-4 text-red-400" />,
+        status: 'Live',
+        tags: ['Whisper AI', 'Auto'],
+        colSpan: 2,
+        hasPersistentHover: true,
+    },
+    {
+        title: 'Smart Q&A',
+        meta: 'Context-aware',
+        description: 'Ask questions about your video and get precise answers sourced directly from the transcript.',
+        icon: <MessageSquare className="w-4 h-4 text-cyan-400" />,
+        status: 'Active',
+        tags: ['LLM', 'RAG'],
+    },
+    {
+        title: 'AI Summaries',
+        meta: 'Instant',
+        description: 'Get a crisp, one-line topic summary generated automatically for every transcription.',
+        icon: <Brain className="w-4 h-4 text-purple-400" />,
+        status: 'Active',
+        tags: ['GPT', 'Auto'],
+    },
+    {
+        title: 'Full Transcript Access',
+        meta: 'Export ready',
+        description: 'Access the complete raw transcript for in-depth study, search, and downloading.',
+        icon: <FileText className="w-4 h-4 text-emerald-400" />,
+        status: 'Live',
+        tags: ['Export', 'Search'],
+        colSpan: 2,
+    },
+    {
+        title: 'Session History',
+        meta: 'Persistent',
+        description: 'All your sessions, queries and answers are stored and accessible anytime.',
+        icon: <Zap className="w-4 h-4 text-amber-400" />,
+        status: 'Live',
+        tags: ['Storage', 'History'],
+    },
+];
+
+function cn(...classes) {
+    return classes.filter(Boolean).join(' ');
+}
+
+function BentoGrid({ items }) {
+    return (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-4 max-w-5xl mx-auto w-full">
+            {items.map((item, index) => (
+                <div
+                    key={index}
+                    className={cn(
+                        'group relative p-5 rounded-xl overflow-hidden transition-all duration-300',
+                        'border border-white/10 bg-white/[0.03]',
+                        'hover:shadow-[0_2px_20px_rgba(255,255,255,0.05)]',
+                        'hover:-translate-y-0.5 will-change-transform',
+                        item.colSpan === 2 ? 'md:col-span-2' : 'col-span-1',
+                        item.hasPersistentHover ? 'shadow-[0_2px_20px_rgba(0,210,255,0.08)] border-white/20' : ''
+                    )}
+                >
+                    <div className={`absolute inset-0 ${item.hasPersistentHover ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity duration-300`}>
+                        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[length:4px_4px]" />
+                    </div>
+
+                    <div className="relative flex flex-col space-y-3">
+                        <div className="flex items-center justify-between">
+                            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-white/10 group-hover:bg-white/15 transition-all duration-300">
+                                {item.icon}
+                            </div>
+                            <span className="text-xs font-medium px-2 py-1 rounded-lg bg-white/10 text-gray-300 transition-colors duration-300 group-hover:bg-white/20">
+                                {item.status || 'Active'}
+                            </span>
+                        </div>
+                        <div>
+                            <h3 className="font-semibold text-white tracking-tight text-[15px]">
+                                {item.title} <span className="ml-1 text-xs text-gray-500 font-normal">{item.meta}</span>
+                            </h3>
+                            <p className="text-sm text-gray-400 leading-snug mt-1">{item.description}</p>
+                        </div>
+                        <div className="flex items-center justify-between mt-1">
+                            <div className="flex items-center gap-2 text-xs text-gray-500">
+                                {item.tags?.map((tag, i) => (
+                                    <span key={i} className="px-2 py-1 rounded-md bg-white/5 hover:bg-white/10 transition-all duration-200">#{tag}</span>
+                                ))}
+                            </div>
+                            <span className="text-xs text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity">Explore →</span>
+                        </div>
+                    </div>
+
+                    <div className={`absolute inset-0 -z-10 rounded-xl p-px bg-gradient-to-br from-transparent via-white/5 to-transparent ${item.hasPersistentHover ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity duration-300`} />
+                </div>
+            ))}
+        </div>
+    );
+}
+
+// ---------- Main Landing Page ----------
+export default function Landing() {
+    const navigate = useNavigate();
+
+    const fadeUpVariants = {
+        hidden: { opacity: 0, y: 30 },
+        visible: (i) => ({
+            opacity: 1,
+            y: 0,
+            transition: { duration: 1, delay: 0.5 + i * 0.2, ease: [0.25, 0.4, 0.25, 1] },
+        }),
+    };
+
+    return (
+        <div className="relative min-h-screen w-full overflow-x-hidden bg-[#030303] text-white font-['Inter',sans-serif]">
+
+            {/* Ambient background glow */}
+            <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/[0.05] via-transparent to-rose-500/[0.05] blur-3xl pointer-events-none" />
+
+            {/* Floating Shapes */}
+            <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                <ElegantShape delay={0.3} width={600} height={140} rotate={12} gradient="from-indigo-500/[0.15]" className="left-[-10%] md:left-[-5%] top-[15%] md:top-[20%]" />
+                <ElegantShape delay={0.5} width={500} height={120} rotate={-15} gradient="from-rose-500/[0.15]" className="right-[-5%] md:right-[0%] top-[60%] md:top-[65%]" />
+                <ElegantShape delay={0.4} width={300} height={80} rotate={-8} gradient="from-violet-500/[0.15]" className="left-[5%] md:left-[10%] bottom-[5%] md:bottom-[10%]" />
+                <ElegantShape delay={0.6} width={200} height={60} rotate={20} gradient="from-amber-500/[0.15]" className="right-[15%] md:right-[20%] top-[10%] md:top-[12%]" />
+                <ElegantShape delay={0.7} width={150} height={40} rotate={-25} gradient="from-cyan-500/[0.15]" className="left-[20%] md:left-[25%] top-[5%] md:top-[8%]" />
+            </div>
+
+            {/* Top gradient fade */}
+            <div className="absolute inset-0 bg-gradient-to-t from-[#030303] via-transparent to-[#030303]/80 pointer-events-none" />
+
+            {/* ---- NAV ---- */}
+            <nav className="relative z-20 flex items-center justify-between px-6 md:px-12 py-6">
+                <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-white/10 border border-white/20 flex items-center justify-center text-white font-bold text-sm">SR</div>
+                    <span className="font-semibold text-lg tracking-tight">SeekRight</span>
+                </div>
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={() => navigate('/login')}
+                        className="px-4 py-2 text-sm border border-white/15 bg-white/5 text-gray-300 rounded-full hover:border-white/40 hover:text-white transition-all duration-200">
+                        Sign In
+                    </button>
+                    <button
+                        onClick={() => navigate('/login')}
+                        className="px-4 py-2 text-sm font-semibold text-black bg-white rounded-full hover:bg-white/90 transition-all duration-200">
+                        Get Started
+                    </button>
+                </div>
+            </nav>
+
+            {/* ---- HERO ---- */}
+            <section className="relative z-10 flex flex-col items-center justify-center text-center px-4 md:px-6 pt-24 pb-16">
+                <motion.div
+                    custom={0}
+                    variants={fadeUpVariants}
+                    initial="hidden"
+                    animate="visible"
+                    className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/[0.03] border border-white/[0.08] mb-8"
+                >
+                    <Circle className="h-2 w-2 fill-rose-500/80" />
+                    <span className="text-sm text-white/60 tracking-wide">AI-Powered Video Intelligence</span>
+                </motion.div>
+
+                <motion.div custom={1} variants={fadeUpVariants} initial="hidden" animate="visible">
+                    <h1 className="text-5xl sm:text-7xl md:text-8xl font-bold tracking-tight leading-none mb-6">
+                        <span className="bg-clip-text text-transparent bg-gradient-to-b from-white to-white/80">
+                            SeekRight
+                        </span>
+                        <br />
+                        <span className="bg-clip-text text-transparent bg-gradient-to-r from-indigo-300 via-white/90 to-rose-300">
+                            Know Every Word
+                        </span>
+                    </h1>
+                </motion.div>
+
+                <motion.div custom={2} variants={fadeUpVariants} initial="hidden" animate="visible">
+                    <p className="text-base sm:text-lg md:text-xl text-white/40 mb-10 leading-relaxed font-light tracking-wide max-w-xl mx-auto px-4">
+                        Transcribe any YouTube video, ask questions, and extract knowledge in seconds with the power of AI.
+                    </p>
+                </motion.div>
+
+                <motion.div custom={3} variants={fadeUpVariants} initial="hidden" animate="visible" className="flex flex-col sm:flex-row items-center gap-4">
+                    <button
+                        onClick={() => navigate('/login')}
+                        className="flex items-center gap-2 px-7 py-3 rounded-full bg-white text-black font-semibold text-sm hover:bg-white/90 transition-all duration-200 shadow-[0_0_30px_rgba(255,255,255,0.2)]">
+                        <Play size={16} className="fill-black" /> Start Analyzing
+                    </button>
+                    <button
+                        onClick={() => navigate('/login')}
+                        className="flex items-center gap-2 px-7 py-3 rounded-full border border-white/15 text-white/70 text-sm hover:border-white/30 hover:text-white transition-all duration-200">
+                        Learn More
+                    </button>
+                </motion.div>
+            </section>
+
+            {/* ---- FEATURES BENTO ---- */}
+            <section className="relative z-10 flex flex-col items-center px-4 pb-24">
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 1.6, duration: 0.8 }}
+                    className="text-center mb-10"
+                >
+                    <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-white mb-3">
+                        Everything You Need to <span className="bg-clip-text text-transparent bg-gradient-to-r from-indigo-300 to-rose-300">Understand Any Video</span>
+                    </h2>
+                    <p className="text-white/40 text-sm max-w-md mx-auto">From raw audio to structured knowledge — all automated.</p>
+                </motion.div>
+
+                <motion.div
+                    initial={{ opacity: 0, y: 30 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 1.9, duration: 0.8 }}
+                    className="w-full"
+                >
+                    <BentoGrid items={seekrightFeatures} />
+                </motion.div>
+            </section>
+
+        </div>
+    );
+}

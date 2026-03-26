@@ -1,118 +1,109 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { MessageSquare, LayoutTemplate, Clock, ChevronRight } from 'lucide-react';
+import { MessageSquare, ExternalLink, ChevronRight } from 'lucide-react';
 
 const QueriesView = ({ history, onSelectSession }) => {
     const [sessionsWithQueries, setSessionsWithQueries] = useState([]);
 
     useEffect(() => {
-        const fetchQueries = async () => {
-            const grouped = [];
-            for (const session of history) {
-                const chatKey = `seekright_chat_${session.session_id}`;
-                const chatData = localStorage.getItem(chatKey);
-                
-                if (chatData) {
-                    try {
-                        const messages = JSON.parse(chatData);
-                        const realMessages = messages.filter(m => m.content && !m.content.startsWith('Transcription complete!') && !m.content.startsWith('Analysis complete!'));
-                        
-                        if (realMessages.length > 0) {
-                            const qaPairs = [];
-                            for(let i=0; i < realMessages.length; i++) {
-                                if (realMessages[i].role === 'user') {
-                                    const q = realMessages[i].content;
-                                    let a = "No response.";
-                                    if (i + 1 < realMessages.length && realMessages[i+1].role === 'assistant') {
-                                        a = realMessages[i+1].content;
-                                        i++;
-                                    }
-                                    qaPairs.push({ question: q, answer: a });
-                                }
-                            }
-                            
-                            if (qaPairs.length > 0) {
-                                // Push the group immediately using youtube_url as the placeholder summary
-                                grouped.push({
-                                    session_id: session.session_id,
-                                    youtube_url: session.youtube_url,
-                                    summary: session.youtube_url, // initial fallback to render instantly
-                                    date: session.date,
-                                    qaPairs: qaPairs
-                                });
+        const grouped = [];
+        for (const session of history) {
+            const chatKey = `seekright_chat_${session.session_id}`;
+            const chatData = localStorage.getItem(chatKey);
+            if (chatData) {
+                try {
+                    const messages = JSON.parse(chatData);
+                    const real = messages.filter(m => m.content && !m.content.startsWith('Transcription complete!') && !m.content.startsWith('Analysis complete!'));
+                    if (real.length > 0) {
+                        const qaPairs = [];
+                        for (let i = 0; i < real.length; i++) {
+                            if (real[i].role === 'user') {
+                                const q = real[i].content;
+                                let a = 'No response.';
+                                if (i + 1 < real.length && real[i + 1].role === 'assistant') { a = real[i + 1].content; i++; }
+                                qaPairs.push({ question: q, answer: a });
                             }
                         }
-                    } catch(e) {}
-                }
-            }
-            // Render immediately
-            setSessionsWithQueries(grouped);
-
-            // Fetch summaries asynchronously in the background
-            grouped.forEach(async (g) => {
-                try {
-                    const res = await fetch(`/api/session/${g.session_id}`);
-                    if (res.ok) {
-                        const data = await res.json();
-                        if (data.summary) {
-                            setSessionsWithQueries(prev => prev.map(s => 
-                                s.session_id === g.session_id ? { ...s, summary: data.summary } : s
-                            ));
+                        if (qaPairs.length > 0) {
+                            grouped.push({ session_id: session.session_id, youtube_url: session.youtube_url, summary: session.youtube_url, date: session.date, qaPairs });
                         }
                     }
-                } catch(e) {}
-            });
-        };
-        fetchQueries();
+                } catch (e) { }
+            }
+        }
+        setSessionsWithQueries(grouped);
+
+        // Async background summary fetch
+        grouped.forEach(async (g) => {
+            try {
+                const res = await fetch(`/api/session/${g.session_id}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.summary) {
+                        setSessionsWithQueries(prev => prev.map(s => s.session_id === g.session_id ? { ...s, summary: data.summary } : s));
+                    }
+                }
+            } catch (e) { }
+        });
     }, [history]);
 
     return (
-        <main className="container" style={{ flex: 1, padding: '40px 24px', display: 'flex', flexDirection: 'column', gap: '32px' }}>
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
-                <h1 style={{ fontSize: '2rem', fontWeight: 600, marginBottom: '8px' }}>Your <span className="text-gradient">Past Queries</span></h1>
-                <p style={{ color: 'var(--text-muted)' }}>Review your questions and answers grouped by transcribed sessions.</p>
+        <div className="flex flex-col gap-6" style={{ fontFamily: "'Inter', sans-serif" }}>
+            {/* Header */}
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
+                <h1 className="text-3xl font-bold tracking-tight">
+                    Your{' '}
+                    <span className="bg-clip-text text-transparent bg-gradient-to-r from-indigo-300 via-white to-rose-300">
+                        Past Queries
+                    </span>
+                </h1>
+                <p className="text-white/40 mt-1 text-sm">Review your questions grouped by video session.</p>
             </motion.div>
 
+            {/* Empty State */}
             {sessionsWithQueries.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '60px', background: 'rgba(255, 255, 255, 0.03)', borderRadius: '20px', border: '1px solid var(--glass-border)' }}>
-                    <MessageSquare size={48} color="var(--text-muted)" style={{ margin: '0 auto 16px', opacity: 0.5 }} />
-                    <h3 style={{ fontSize: '1.2rem', color: 'var(--text-main)', marginBottom: '8px' }}>No Queries Found</h3>
-                    <p style={{ color: 'var(--text-muted)' }}>You haven't asked any questions yet. Start a session and chat with SeekRight!</p>
+                <div className="rounded-2xl border border-dashed border-white/10 p-16 text-center">
+                    <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mx-auto mb-4">
+                        <MessageSquare size={22} className="text-white/30" />
+                    </div>
+                    <h3 className="text-base font-medium text-white/60 mb-1">No queries yet</h3>
+                    <p className="text-sm text-white/30">Start a session and ask questions to see your history here.</p>
                 </div>
             ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
-                    {sessionsWithQueries.map((sessionGroup, i) => (
-                        <motion.div 
-                            initial={{ opacity: 0, y: 20 }} 
-                            animate={{ opacity: 1, y: 0 }} 
-                            transition={{ delay: i * 0.05 }}
+                <div className="flex flex-col gap-4">
+                    {sessionsWithQueries.map((sg, i) => (
+                        <motion.div
                             key={i}
-                            style={{ 
-                                padding: '24px', borderRadius: '16px', background: 'rgba(255, 255, 255, 0.02)', 
-                                border: '1px solid var(--glass-border)', display: 'flex', flexDirection: 'column', gap: '16px'
-                            }}
+                            initial={{ opacity: 0, y: 16 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: i * 0.06, duration: 0.4 }}
+                            className="rounded-2xl border border-white/10 bg-white/[0.02] overflow-hidden"
                         >
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '16px' }}>
-                                <div style={{ flex: 1, overflow: 'hidden', paddingRight: '20px' }}>
-                                    <div style={{ fontSize: '1.2rem', fontWeight: '600', color: 'var(--text-main)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{sessionGroup.summary}</div>
-                                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
-                                        <LayoutTemplate size={14} color="var(--accent-ice-blue)" flexShrink={0} /> {sessionGroup.youtube_url}
+                            {/* Session Header */}
+                            <div className="flex items-center justify-between gap-4 p-5 border-b border-white/[0.06]">
+                                <div className="flex-1 overflow-hidden">
+                                    <div className="font-semibold text-white text-base truncate">{sg.summary}</div>
+                                    <div className="flex items-center gap-1.5 mt-1">
+                                        <ExternalLink size={11} className="text-cyan-400/60 flex-shrink-0" />
+                                        <span className="text-xs text-white/30 truncate">{sg.youtube_url}</span>
                                     </div>
                                 </div>
-                                <button 
-                                    onClick={() => onSelectSession(sessionGroup.session_id)}
-                                    className="btn btn-primary"
-                                    style={{ padding: '8px 16px', fontSize: '0.9rem', borderRadius: '8px', flexShrink: 0, display: 'flex', alignItems: 'center' }}
+                                <button
+                                    onClick={() => onSelectSession(sg.session_id)}
+                                    className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-white text-black text-xs font-semibold hover:bg-white/90 transition-all flex-shrink-0"
                                 >
-                                    Resume Session <ChevronRight size={14} style={{ marginLeft: '4px' }} />
+                                    Resume <ChevronRight size={12} />
                                 </button>
                             </div>
-                            
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                                {sessionGroup.qaPairs.map((qa, j) => (
-                                    <div key={j} style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-                                        <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: 'var(--text-muted)' }}>Q</div>
-                                        <div style={{ fontWeight: 500, fontSize: '0.95rem', color: 'var(--text-main)', marginTop: '4px' }}>{qa.question}</div>
+
+                            {/* Questions list */}
+                            <div className="flex flex-col divide-y divide-white/[0.04]">
+                                {sg.qaPairs.map((qa, j) => (
+                                    <div key={j} className="flex items-start gap-3 px-5 py-3">
+                                        <div className="w-6 h-6 rounded-lg flex items-center justify-center bg-white/5 flex-shrink-0 mt-0.5">
+                                            <span className="text-[10px] font-bold text-white/40">Q</span>
+                                        </div>
+                                        <p className="text-sm text-white/70 leading-relaxed">{qa.question}</p>
                                     </div>
                                 ))}
                             </div>
@@ -120,7 +111,7 @@ const QueriesView = ({ history, onSelectSession }) => {
                     ))}
                 </div>
             )}
-        </main>
+        </div>
     );
 };
 
