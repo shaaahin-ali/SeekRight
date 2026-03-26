@@ -75,10 +75,21 @@ const ChatInterface = ({ sessionId }) => {
         setIsTyping(true);
 
         try {
+            // Build chat history, excluding the current message and the welcome message
+            const historyForApi = messages
+                .filter(m => m.role && m.content && !m.isError && m !== WELCOME_MESSAGE)
+                .slice(-6); // Keep last 6 messages
+
+            const payload = { 
+                question: userMessage, 
+                context_id: sessionId.toString(),
+                chat_history: historyForApi.map(m => ({ role: m.role, content: m.content }))
+            };
+
             const response = await fetch('/api/query', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ question: userMessage, context_id: sessionId.toString() })
+                body: JSON.stringify(payload)
             });
 
             if (!response.ok) throw new Error('Failed to query the backend');

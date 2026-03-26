@@ -38,10 +38,14 @@ class SessionStatusResponse(BaseModel):
     class Config:
         from_attributes = True
 
-# Query Schemas
+class Message(BaseModel):
+    role: str
+    content: str
+
 class QueryRequest(BaseModel):
     question: str
     context_id: Optional[str] = None
+    chat_history: Optional[List[Message]] = []
 
 class QueryResponse(BaseModel):
     answer: str

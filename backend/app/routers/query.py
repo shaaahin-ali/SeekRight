@@ -88,12 +88,17 @@ async def query_transcript(request: QueryRequest, db: Session = Depends(get_db))
     )
     
     if not valid_results:
-        return QueryResponse(answer="No relevant content found in transcript.", sources=[])
-        
-    # STRICT ANSWER CONSTRUCTION
-    # Strategy: Filtered by similarity threshold, then returned in narrative order (O(n) map).
-    valid_indices = {idx for dist, idx in valid_results}
-    dist_map = {idx: dist for dist, idx in valid_results}
+        # Fallback: if distance threshold filters out everything, fetch the top 3 regardless 
+        # so the LLM at least has some context to summarize or deny it.
+        D, I = index.search(query_vector.astype('float32'), 3)
+        if D is not None and len(D) > 0 and len(D[0]) > 0:
+            valid_indices = {idx for idx in I[0] if idx != -1}
+            dist_map = {idx: dist for dist, idx in zip(D[0], I[0]) if idx != -1}
+        else:
+            return QueryResponse(answer="No relevant content found in transcript.", sources=[])
+    else:
+        valid_indices = {idx for dist, idx in valid_results}
+        dist_map = {idx: dist for dist, idx in valid_results}
     
     seen = set()
     selected_chunks = []
@@ -104,14 +109,15 @@ async def query_transcript(request: QueryRequest, db: Session = Depends(get_db))
             if chunk.chunk_text not in seen:
                 seen.add(chunk.chunk_text)
                 selected_chunks.append(chunk.chunk_text)
-                sources.append(f"chunk_index_{chunk.chunk_index}_dist_{dist_map[idx]:.3f}")
+                sources.append(f"chunk_index_{chunk.chunk_index}_dist_{dist_map.get(idx, 0):.3f}")
             
     context_text = "\n\n".join(selected_chunks)
 
     try:
         llm_answer = await generate_answer(
             question=request.question,
-            context=context_text
+            context=context_text,
+            chat_history=request.chat_history
         )
     except Exception as e:
         logger.error(f"[Query] LLM Error: {str(e)}", exc_info=True)

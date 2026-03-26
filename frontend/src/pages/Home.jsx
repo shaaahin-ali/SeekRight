@@ -3,8 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LogOut, Youtube, Loader2, CheckCircle2, History, Plus, ArrowLeft } from 'lucide-react';
 import ChatInterface from '../components/ChatInterface';
+import QueriesView from '../components/QueriesView';
 
 const Home = () => {
+    const [activeTab, setActiveTab] = useState('Dashboard');
     const navigate = useNavigate();
     const [userEmail, setUserEmail] = useState('');
     const [url, setUrl] = useState('');
@@ -134,10 +136,10 @@ const Home = () => {
                         </div>
                         {/* Nav Links */}
                         <div style={{ display: 'none', gap: '24px' }} className="md-flex">
-                            {['Dashboard', 'Queries', 'Analytics'].map((item, i) => (
-                                <a key={i} href="#" style={{ color: i === 0 ? 'var(--text-main)' : 'var(--text-muted)', fontSize: '0.9rem', fontWeight: 500, position: 'relative' }}>
+                            {['Dashboard', 'Queries'].map((item, i) => (
+                                <a key={i} href="#" onClick={(e) => { e.preventDefault(); setActiveTab(item); }} style={{ color: activeTab === item ? 'var(--text-main)' : 'var(--text-muted)', fontSize: '0.9rem', fontWeight: 500, position: 'relative' }}>
                                     {item}
-                                    {i === 0 && <motion.div layoutId="nav-indicator" style={{ position: 'absolute', bottom: '-26px', left: 0, right: 0, height: '2px', background: 'var(--accent-ice-blue)' }} />}
+                                    {activeTab === item && <motion.div layoutId="nav-indicator" style={{ position: 'absolute', bottom: '-26px', left: 0, right: 0, height: '2px', background: 'var(--accent-ice-blue)' }} />}
                                 </a>
                             ))}
                         </div>
@@ -160,7 +162,8 @@ const Home = () => {
             <style>{`@media(min-width: 768px) { .md-flex { display: flex !important; } }`}</style>
 
             {/* Main Content Area */}
-            <main className="container" style={{ flex: 1, padding: '40px 24px', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 400px', gap: '32px', alignItems: 'start' }}>
+            {activeTab === 'Dashboard' ? (
+                <main className="container" style={{ flex: 1, padding: '40px 24px', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 400px', gap: '32px', alignItems: 'start' }}>
 
                 {/* Left Column (Stats & Chat) */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
@@ -318,6 +321,9 @@ const Home = () => {
                     </AnimatePresence>
                 </div>
             </main>
+            ) : (
+                <QueriesView history={history} onSelectSession={(sessionId) => { setActiveSessionId(sessionId); setSessionStatus('COMPLETED'); setActiveTab('Dashboard'); }} />
+            )}
 
             <style>{`.animate-spin { animation: spin 1s linear infinite; } @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
         </motion.div>
