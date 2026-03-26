@@ -2,21 +2,64 @@ import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Send, User, Sparkles, BookOpen, Activity } from 'lucide-react';
 
+const WELCOME_MESSAGE = {
+    role: 'assistant',
+    content: 'Transcription complete! Ask me any questions about this session.',
+    sources: []
+};
+
 const ChatInterface = ({ sessionId }) => {
-    const [messages, setMessages] = useState([
-        {
-            role: 'assistant',
-            content: 'Transcription complete! Ask me any questions about this session.',
-            sources: []
-        }
-    ]);
+    const [messages, setMessages] = useState([WELCOME_MESSAGE]);
     const [input, setInput] = useState('');
     const [isTyping, setIsTyping] = useState(false);
     const messagesEndRef = useRef(null);
+    const prevSessionIdRef = useRef(sessionId);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     };
+
+    // Load chat history when sessionId changes (including first mount)
+    useEffect(() => {
+        // Save the previous session's chat before switching
+        if (prevSessionIdRef.current && prevSessionIdRef.current !== sessionId) {
+            // messages state still holds previous session's data at this point
+            // but we already saved on every message change (below), so no action needed
+        }
+
+        // Load the new session's chat from localStorage
+        const storageKey = `seekright_chat_${sessionId}`;
+        try {
+            const saved = localStorage.getItem(storageKey);
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    setMessages(parsed);
+                } else {
+                    setMessages([WELCOME_MESSAGE]);
+                }
+            } else {
+                setMessages([WELCOME_MESSAGE]);
+            }
+        } catch {
+            setMessages([WELCOME_MESSAGE]);
+        }
+
+        setInput('');
+        prevSessionIdRef.current = sessionId;
+    }, [sessionId]);
+
+    // Save chat history to localStorage whenever messages change
+    useEffect(() => {
+        if (sessionId && messages.length > 0) {
+            const storageKey = `seekright_chat_${sessionId}`;
+            try {
+                localStorage.setItem(storageKey, JSON.stringify(messages));
+            } catch (e) {
+                console.warn('Failed to save chat history:', e);
+            }
+        }
+    }, [messages, sessionId]);
 
     useEffect(() => {
         scrollToBottom();
