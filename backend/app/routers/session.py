@@ -65,3 +65,18 @@ def get_raw_transcript(
     if not transcript:
         raise HTTPException(status_code=404, detail="Transcript not found")
     return PlainTextResponse(content=transcript.full_text or "")
+
+@router.delete("/session/{session_id}")
+def delete_session_route(
+    session_id: int,
+    db: Session = Depends(get_db)
+):
+    session = db.query(models.Session).filter_by(session_id=session_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    db.query(models.TranscriptChunk).filter_by(session_id=session_id).delete()
+    db.query(models.Transcript).filter_by(session_id=session_id).delete()
+    db.delete(session)
+    db.commit()
+    return {"message": "Session deleted successfully"}

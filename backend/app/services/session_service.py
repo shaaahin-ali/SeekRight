@@ -1,3 +1,4 @@
+import re
 import time
 import logging
 from datetime import datetime
@@ -9,6 +10,35 @@ from app.database import SessionLocal
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Regex to strip ANSI colour / control codes produced by yt-dlp
+_ANSI_RE = re.compile(r'\x1b\[[0-9;]*[mGKHF]')
+
+
+def _clean_error(raw: str) -> str:
+    """Strip ANSI codes and return a concise, user-friendly error message."""
+    cleaned = _ANSI_RE.sub('', raw).strip()
+
+    # Map known yt-dlp patterns to friendly messages
+    lower = cleaned.lower()
+    if 'sign in to confirm' in lower or 'bot' in lower:
+        return (
+            "YouTube blocked the download — bot detection triggered. "
+            "Please add a cookies.txt file (exported from your browser) to "
+            "backend/app/services/ and restart the server."
+        )
+    if 'video unavailable' in lower:
+        return "This YouTube video is unavailable or has been removed."
+    if 'private video' in lower:
+        return "This YouTube video is private and cannot be downloaded."
+    if 'copyright' in lower:
+        return "This video cannot be downloaded due to copyright restrictions."
+
+    # Generic fallback: return the first line only (often the most useful)
+    first_line = cleaned.splitlines()[0] if cleaned else cleaned
+    # Remove leading 'ERROR:' label if present
+    first_line = re.sub(r'^error:\s*', '', first_line, flags=re.IGNORECASE)
+    return first_line or "An unknown transcription error occurred."
 
 
 def create_session(db: Session, data):
@@ -31,7 +61,7 @@ def create_session(db: Session, data):
     ).first()
 
     if existing:
-        raise HTTPException(status_code=400, detail="Session already exists")
+        return existing
 
     new_session = models.Session(
         subject_id=data.subject_id,
@@ -202,6 +232,7 @@ def process_session(session_id: int):
         error_msg = str(e)
         end_time = datetime.utcnow()
         logger.error(f"Error processing session {session_id}: {error_msg}")
+        error_msg = _clean_error(error_msg)
 
         try:
             error_db = SessionLocal()

@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { MessageSquare, ExternalLink, ChevronRight } from 'lucide-react';
+import { MessageSquare, ExternalLink, ChevronRight, Trash2 } from 'lucide-react';
 
-const QueriesView = ({ history, onSelectSession }) => {
+const QueriesView = ({ history, onSelectSession, onDeleteSession }) => {
     const [sessionsWithQueries, setSessionsWithQueries] = useState([]);
 
     useEffect(() => {
         const grouped = [];
+        const activeUser = localStorage.getItem('seekright_active_user') || 'default';
         for (const session of history) {
-            const chatKey = `seekright_chat_${session.session_id}`;
+            const chatKey = `seekright_chat_${activeUser}_${session.session_id}`;
             const chatData = localStorage.getItem(chatKey);
             if (chatData) {
                 try {
@@ -88,12 +89,21 @@ const QueriesView = ({ history, onSelectSession }) => {
                                         <span className="text-xs text-white/30 truncate">{sg.youtube_url}</span>
                                     </div>
                                 </div>
-                                <button
-                                    onClick={() => onSelectSession(sg.session_id)}
-                                    className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-white text-black text-xs font-semibold hover:bg-white/90 transition-all flex-shrink-0"
-                                >
-                                    Resume <ChevronRight size={12} />
-                                </button>
+                                <div className="flex items-center gap-2 flex-shrink-0">
+                                    <button
+                                        onClick={() => onDeleteSession(sg.session_id)}
+                                        className="p-2.5 rounded-full text-red-400/70 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                                        title="Delete Postcard"
+                                    >
+                                        <Trash2 size={14} />
+                                    </button>
+                                    <button
+                                        onClick={() => onSelectSession(sg.session_id)}
+                                        className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-white text-black text-xs font-semibold hover:bg-white/90 transition-all flex-shrink-0"
+                                    >
+                                        Resume <ChevronRight size={12} />
+                                    </button>
+                                </div>
                             </div>
 
                             {/* Questions list */}

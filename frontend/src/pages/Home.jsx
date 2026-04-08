@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LogOut, Youtube, Loader2, CheckCircle2, History, Plus, ArrowLeft, LayoutGrid, MessageSquare, Circle } from 'lucide-react';
+import { LogOut, Youtube, Loader2, CheckCircle2, History, Plus, ArrowLeft, LayoutGrid, MessageSquare, Circle, Trash2 } from 'lucide-react';
 import ChatInterface from '../components/ChatInterface';
 import QueriesView from '../components/QueriesView';
 
 // ---- History Item with async topic fetch ----
-const HistoryItem = ({ item, onClick, getThumbnail }) => {
+const HistoryItem = ({ item, onClick, getThumbnail, onDelete }) => {
     const [summary, setSummary] = useState(null);
     const thumbnail = getThumbnail(item.youtube_url);
 
@@ -18,32 +18,41 @@ const HistoryItem = ({ item, onClick, getThumbnail }) => {
     }, [item.session_id]);
 
     return (
-        <motion.button
-            onClick={onClick}
-            whileHover={{ scale: 1.01 }}
-            whileTap={{ scale: 0.99 }}
-            className="w-full text-left flex items-center gap-3 p-3 rounded-xl border border-white/10 bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/20 transition-all duration-200"
-        >
-            {thumbnail && (
-                <img
-                    src={thumbnail}
-                    alt="thumb"
-                    className="w-16 h-10 rounded-lg object-cover flex-shrink-0 border border-white/10"
-                    onError={e => { e.target.style.display = 'none'; }}
-                />
-            )}
-            <div className="flex-1 overflow-hidden">
-                <div className="text-sm font-medium text-white truncate">
-                    {summary || <span className="text-white/30 italic">Loading title...</span>}
+        <div className="relative group">
+            <motion.button
+                onClick={onClick}
+                whileHover={{ scale: 1.01 }}
+                whileTap={{ scale: 0.99 }}
+                className="w-full text-left flex items-center gap-3 p-3 rounded-xl border border-white/10 bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/20 transition-all duration-200"
+            >
+                {thumbnail && (
+                    <img
+                        src={thumbnail}
+                        alt="thumb"
+                        className="w-16 h-10 rounded-lg object-cover flex-shrink-0 border border-white/10"
+                        onError={e => { e.target.style.display = 'none'; }}
+                    />
+                )}
+                <div className="flex-1 overflow-hidden">
+                    <div className="text-sm font-medium text-white truncate">
+                        {summary || <span className="text-white/30 italic">Loading title...</span>}
+                    </div>
+                    <div className="text-xs text-white/40 mt-0.5">
+                        Session #{item.session_id} · {new Date(item.date).toLocaleDateString()}
+                    </div>
                 </div>
-                <div className="text-xs text-white/40 mt-0.5">
-                    Session #{item.session_id} · {new Date(item.date).toLocaleDateString()}
-                </div>
-            </div>
-            <span className="text-xs text-cyan-400/80 font-medium px-2 py-1 rounded-full bg-cyan-400/10 border border-cyan-400/20 flex-shrink-0">
-                Open
-            </span>
-        </motion.button>
+                <span className="text-xs text-cyan-400/80 font-medium px-2 py-1 rounded-full bg-cyan-400/10 border border-cyan-400/20 flex-shrink-0 group-hover:opacity-0 transition-opacity duration-200">
+                    Open
+                </span>
+            </motion.button>
+            <button
+                onClick={(e) => { e.stopPropagation(); onDelete(item.session_id); }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-full hidden group-hover:flex bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-all z-10 items-center justify-center border border-red-500/20"
+                title="Delete Session"
+            >
+                <Trash2 size={13} />
+            </button>
+        </div>
     );
 };
 
@@ -113,7 +122,12 @@ const Home = () => {
             setSessionStatus(data.processing_status);
             const activeUser = localStorage.getItem('seekright_active_user');
             if (activeUser) {
-                const updated = [{ session_id: data.session_id, youtube_url: url, date: new Date().toISOString() }, ...history];
+                const existingIndex = history.findIndex(h => h.session_id === data.session_id);
+                let updated = [...history];
+                if (existingIndex !== -1) {
+                    updated.splice(existingIndex, 1);
+                }
+                updated = [{ session_id: data.session_id, youtube_url: url, date: new Date().toISOString() }, ...updated];
                 setHistory(updated);
                 localStorage.setItem(`seekright_history_${activeUser}`, JSON.stringify(updated));
             }
@@ -123,6 +137,29 @@ const Home = () => {
             alert('Failed to reach backend API. Ensure Uvicorn is running.');
         } finally {
             setIsSubmitting(false);
+        }
+    };
+
+    const handleDeleteSession = async (sessionId) => {
+        try {
+            await fetch(`/api/session/${sessionId}`, { method: 'DELETE' });
+            // Remove from history state
+            const updated = history.filter(s => s.session_id !== sessionId);
+            setHistory(updated);
+            // Update local storage
+            const activeUser = localStorage.getItem('seekright_active_user');
+            if (activeUser) {
+                localStorage.setItem(`seekright_history_${activeUser}`, JSON.stringify(updated));
+                localStorage.removeItem(`seekright_chat_${activeUser}_${sessionId}`);
+            }
+            // If it's the currently active session, clear it
+            if (activeSessionId === sessionId) {
+                setActiveSessionId(null);
+                setSessionStatus(null);
+                setFailureReason(null);
+            }
+        } catch (error) {
+            console.error('Failed to delete session', error);
         }
     };
 
@@ -232,6 +269,7 @@ const Home = () => {
                                                     item={item}
                                                     onClick={() => { setActiveSessionId(item.session_id); setSessionStatus('COMPLETED'); }}
                                                     getThumbnail={getYouTubeThumbnail}
+                                                    onDelete={handleDeleteSession}
                                                 />
                                             ))}
                                         </div>
@@ -329,9 +367,19 @@ const Home = () => {
                                                 ) : sessionStatus === 'COMPLETED' ? (
                                                     <><CheckCircle2 size={15} className="text-emerald-400" /><span className="text-emerald-400">Ready for Analysis</span></>
                                                 ) : (
-                                                    <div className="flex flex-col gap-1">
-                                                        <span className="text-red-400">⚠ Transcription Failed</span>
-                                                        {failureReason && <span className="text-white/40 text-xs font-normal">{failureReason}</span>}
+                                                    <div className="flex flex-col gap-2 w-full">
+                                                        <span className="text-red-400 font-semibold">⚠ Transcription Failed</span>
+                                                        {failureReason && (
+                                                            <p className="text-white/50 text-xs font-normal leading-relaxed break-words whitespace-pre-wrap">
+                                                                {failureReason}
+                                                            </p>
+                                                        )}
+                                                        <button
+                                                            onClick={() => { setActiveSessionId(null); setSessionStatus(null); setFailureReason(null); }}
+                                                            className="mt-1 self-start text-xs text-red-400/80 hover:text-red-300 underline underline-offset-2 transition-colors"
+                                                        >
+                                                            Dismiss &amp; Try Again
+                                                        </button>
                                                     </div>
                                                 )}
                                             </div>
@@ -365,6 +413,7 @@ const Home = () => {
                                     setSessionStatus('COMPLETED');
                                     setActiveTab('Dashboard');
                                 }}
+                                onDeleteSession={handleDeleteSession}
                             />
                         </motion.div>
                     )}

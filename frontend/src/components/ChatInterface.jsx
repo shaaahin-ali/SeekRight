@@ -12,7 +12,8 @@ const ChatInterface = ({ sessionId }) => {
     const [messages, setMessages] = useState(() => {
         if (sessionId) {
             try {
-                const saved = localStorage.getItem(`seekright_chat_${sessionId}`);
+                const activeUser = localStorage.getItem('seekright_active_user') || 'default';
+                const saved = localStorage.getItem(`seekright_chat_${activeUser}_${sessionId}`);
                 if (saved) {
                     const parsed = JSON.parse(saved);
                     if (Array.isArray(parsed) && parsed.length > 0) return parsed;
@@ -34,7 +35,8 @@ const ChatInterface = ({ sessionId }) => {
     // Save chat history to localStorage whenever messages change
     useEffect(() => {
         if (sessionId && messages.length > 0) {
-            const storageKey = `seekright_chat_${sessionId}`;
+            const activeUser = localStorage.getItem('seekright_active_user') || 'default';
+            const storageKey = `seekright_chat_${activeUser}_${sessionId}`;
             try {
                 localStorage.setItem(storageKey, JSON.stringify(messages));
             } catch (e) {
