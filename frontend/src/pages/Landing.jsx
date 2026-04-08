@@ -2,6 +2,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { Circle, Youtube, Brain, FileText, Zap, MessageSquare, Play } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import TeamSection from '../components/TeamSection';
 
 // ---------- ElegantShape ----------
 function ElegantShape({ className, delay = 0, width = 400, height = 100, rotate = 0, gradient = 'from-white/[0.08]' }) {
@@ -245,6 +246,14 @@ export default function Landing() {
                     <BentoGrid items={seekrightFeatures} />
                 </motion.div>
             </section>
+
+            {/* ---- CREATORS / TEAM ---- */}
+            <TeamSection />
+
+            {/* ---- FOOTER ---- */}
+            <footer className="relative z-10 border-t border-white/[0.06] py-8 text-center">
+                <p className="text-white/20 text-xs">© 2026 SeekRight · Built with ❤️ by the SeekRight Team</p>
+            </footer>
 
         </div>
     );
