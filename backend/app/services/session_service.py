@@ -1,0 +1,261 @@
+import re
+import time
+import logging
+from datetime import datetime
+from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
+from fastapi import HTTPException
+from app import models
+from app.database import SessionLocal
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Regex to strip ANSI colour / control codes produced by yt-dlp
+_ANSI_RE = re.compile(r'\x1b\[[0-9;]*[mGKHF]')
+
+
+def _clean_error(raw: str) -> str:
+    """Strip ANSI codes and return a concise, user-friendly error message."""
+    cleaned = _ANSI_RE.sub('', raw).strip()
+
+    # Map known yt-dlp patterns to friendly messages
+    lower = cleaned.lower()
+    if 'sign in to confirm' in lower or 'bot' in lower:
+        return (
+            "YouTube blocked the download — bot detection triggered. "
+            "Please add a cookies.txt file (exported from your browser) to "
+            "backend/app/services/ and restart the server."
+        )
+    if 'video unavailable' in lower:
+        return "This YouTube video is unavailable or has been removed."
+    if 'private video' in lower:
+        return "This YouTube video is private and cannot be downloaded."
+    if 'copyright' in lower:
+        return "This video cannot be downloaded due to copyright restrictions."
+
+    # Generic fallback: return the first line only (often the most useful)
+    first_line = cleaned.splitlines()[0] if cleaned else cleaned
+    # Remove leading 'ERROR:' label if present
+    first_line = re.sub(r'^error:\s*', '', first_line, flags=re.IGNORECASE)
+    return first_line or "An unknown transcription error occurred."
+
+
+def create_session(db: Session, data):
+    subject = db.query(models.Subject).filter(
+        models.Subject.subject_id == data.subject_id
+    ).first()
+
+    if not subject:
+        raise HTTPException(status_code=404, detail="Subject not found")
+
+    user = db.query(models.User).filter(
+        models.User.user_id == data.uploaded_by
+    ).first()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    existing = db.query(models.Session).filter(
+        models.Session.youtube_url == data.youtube_url
+    ).first()
+
+    if existing:
+        return existing
+
+    new_session = models.Session(
+        subject_id=data.subject_id,
+        youtube_url=data.youtube_url,
+        uploaded_by=data.uploaded_by,
+        processing_status=models.ProcessingStatus.PENDING
+    )
+
+    db.add(new_session)
+    
+    try:
+        db.commit()
+        db.refresh(new_session)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Session with this YouTube URL already exists")
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error creating session: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+    return new_session
+
+
+def get_session_status(db: Session, session_id: int):
+    session = db.query(models.Session).filter(
+        models.Session.session_id == session_id
+    ).first()
+
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    return session
+
+def process_session(session_id: int):
+    db = SessionLocal()
+
+    try:
+        session = db.query(models.Session).filter(
+            models.Session.session_id == session_id
+        ).with_for_update().first()
+
+        if not session:
+            return
+
+        if session.processing_status == models.ProcessingStatus.COMPLETED:
+            logger.info(f"Session {session_id} already COMPLETED. Skipping.")
+            return
+
+        existing_transcript = db.query(models.Transcript).filter(
+            models.Transcript.session_id == session_id
+        ).first()
+
+        if existing_transcript:
+            logger.info(f"Transcript already exists for session {session_id}. Skipping.")
+            return
+
+        # ------------------------
+        # PROCESSING STAGE
+        # ------------------------
+        session.processing_status = models.ProcessingStatus.PROCESSING
+        session.started_at = datetime.utcnow()
+        db.commit()
+        logger.info(f"Session {session_id} moved to PROCESSING")
+
+        # ------------------------
+        # TRANSCRIPTION STAGE
+        # ------------------------
+        session.processing_status = models.ProcessingStatus.TRANSCRIBING
+        db.commit()
+        logger.info(f"Session {session_id} moved to TRANSCRIBING")
+
+        from app.services.transcription_service import transcribe
+
+        max_retries = 1
+        attempt = 0
+        transcription_result = None
+
+        while attempt <= max_retries:
+            try:
+                logger.info(f"Transcription attempt {attempt + 1} for session {session_id}")
+                transcription_result = transcribe(session.youtube_url)
+                break
+            except Exception as e:
+                attempt += 1
+                if attempt > max_retries:
+                    logger.error(f"Transcription failed after {max_retries + 1} attempts: {str(e)}")
+                    raise e
+                logger.warning(f"Transcription attempt {attempt} failed, retrying... Error: {str(e)}")
+
+        full_text = transcription_result["full_text"]
+        language = transcription_result["language"]
+        segments = transcription_result["segments"]
+
+        # ------------------------
+        # CHUNKING STAGE
+        # ------------------------
+        session.processing_status = models.ProcessingStatus.CHUNKING
+        db.commit()
+        logger.info(f"Session {session_id} moved to CHUNKING")
+
+        from app.services.chunk_service import generate_chunks
+
+        chunks_data = generate_chunks(
+            full_text=full_text,
+            segments=segments,
+            session_id=session_id,
+            subject_id=session.subject_id
+        )
+
+        # ------------------------
+        # PERSISTENCE STAGE (atomic via single commit)
+        # ------------------------
+
+        check_session = db.query(models.Session).filter(
+            models.Session.session_id == session_id
+        ).first()
+
+        if not check_session:
+            logger.warning(f"Session {session_id} deleted mid-processing. Aborting.")
+            return
+
+        summary = None
+        faqs = None
+        try:
+            from app.services.llm_service import generate_summary_and_faqs_sync
+            import json
+            parsed = generate_summary_and_faqs_sync(full_text)
+            summary = parsed.get("summary")
+            faqs = json.dumps(parsed.get("faqs", []))
+        except Exception as e:
+            logger.error(f"Failed to generate summary/faqs: {e}")
+
+        # Add Transcript
+        db.add(models.Transcript(
+            session_id=session_id,
+            full_text=full_text,
+            language=language,
+            summary=summary,
+            faqs=faqs
+        ))
+
+        # Add Chunks
+        for chunk_dict in chunks_data:
+            db.add(models.TranscriptChunk(
+                session_id=chunk_dict["session_id"],
+                subject_id=chunk_dict["subject_id"],
+                chunk_text=chunk_dict["chunk_text"],
+                start_time=chunk_dict["start_time"],
+                end_time=chunk_dict["end_time"],
+                chunk_index=chunk_dict["chunk_index"]
+            ))
+
+        # Finalize session
+        check_session.processing_status = models.ProcessingStatus.COMPLETED
+        check_session.completed_at = datetime.utcnow()
+
+        if check_session.started_at:
+            duration = (check_session.completed_at - check_session.started_at).total_seconds()
+            check_session.duration = float(duration)
+
+        # 🔥 Single commit for transcript + chunks + completed status
+        db.commit()
+
+        logger.info(f"Session {session_id} moved to COMPLETED")
+
+    except Exception as e:
+        error_msg = str(e)
+        end_time = datetime.utcnow()
+        logger.error(f"Error processing session {session_id}: {error_msg}")
+        error_msg = _clean_error(error_msg)
+
+        try:
+            error_db = SessionLocal()
+            failed_session = error_db.query(models.Session).filter(
+                models.Session.session_id == session_id
+            ).first()
+
+            if failed_session:
+                failed_session.processing_status = models.ProcessingStatus.FAILED
+                failed_session.failure_reason = error_msg
+                failed_session.completed_at = end_time
+
+                if failed_session.started_at:
+                    duration = (end_time - failed_session.started_at).total_seconds()
+                    failed_session.duration = float(duration)
+
+                error_db.commit()
+                logger.info(f"Session {session_id} marked as FAILED.")
+
+            error_db.close()
+
+        except Exception as err_log_e:
+            logger.error(f"Critical: Failed to log error state for session {session_id}: {str(err_log_e)}")
+
+    finally:
+        db.close()

@@ -1,0 +1,194 @@
+# SeekRight Backend - Full Code Report
+
+This document contains the complete source code for the SeekRight backend as of the latest refactoring.
+
+## Table of Contents
+1. [Main Application (`main.py`)](#main-application-mainpy)
+2. [Schemas (`schemas.py`)](#schemas-schemaspy)
+3. [Routers](#routers)
+    - [Session Router (`session.py`)](#session-router-sessionpy)
+    - [Auth Router (`auth.py`)](#auth-router-authpy)
+    - [Query Router (`query.py`)](#query-router-querypy)
+4. [Tests (`test_session.py`)](#tests-test_sessionpy)
+
+---
+
+## Main Application ([main.py](file:///c:/Users/shahi/SeekRight/backend/app/main.py))
+```python
+from fastapi import FastAPI
+from app.routers import auth, session, query
+
+app = FastAPI(title="SeekRight API")
+
+app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
+app.include_router(session.router, prefix="/api", tags=["Session"])
+app.include_router(query.router, prefix="/api", tags=["Query"])
+
+@app.get("/")
+def root():
+    return {"status": "SeekRight backend running"}
+
+@app.get("/health")
+def health():
+    return {"status": "healthy"}
+```
+
+---
+
+## Schemas ([schemas.py](file:///c:/Users/shahi/SeekRight/backend/app/schemas.py))
+```python
+from pydantic import BaseModel, EmailStr
+from typing import List, Optional
+from datetime import datetime
+
+# Auth Schemas
+class UserBase(BaseModel):
+    email: EmailStr
+
+class UserCreate(UserBase):
+    password: str
+
+class UserResponse(UserBase):
+    id: int
+    is_active: bool
+
+    class Config:
+        from_attributes = True
+
+# Session Schemas
+class SessionCreate(BaseModel):
+    subject_id: int
+    youtube_url: str
+    uploaded_by: int
+
+class SessionResponse(BaseModel):
+    session_id: int
+    processing_status: str
+
+# Query Schemas
+class QueryRequest(BaseModel):
+    question: str
+    context_id: Optional[str] = None
+
+class QueryResponse(BaseModel):
+    answer: str
+    sources: List[str]
+```
+
+---
+
+## Routers
+
+### Session Router ([session.py](file:///c:/Users/shahi/SeekRight/backend/app/routers/session.py))
+```python
+from fastapi import APIRouter, HTTPException
+from app.schemas import SessionCreate, SessionResponse
+
+router = APIRouter()
+
+# In-memory storage for demo purposes
+# In a real app, this would be a database
+sessions = {}
+
+@router.post("/session", response_model=SessionResponse)
+async def create_session(session_data: SessionCreate):
+    session_id = len(sessions) + 1
+    sessions[session_id] = "PROCESSING"
+    return {
+        "session_id": session_id,
+        "processing_status": "PROCESSING"
+    }
+
+@router.get("/session/{id}/status")
+async def get_session_status(id: int):
+    status = sessions.get(id)
+    if not status:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    return {
+        "session_id": id,
+        "processing_status": status
+    }
+```
+
+### Auth Router ([auth.py](file:///c:/Users/shahi/SeekRight/backend/app/routers/auth.py))
+```python
+from fastapi import APIRouter, Depends, HTTPException, status
+from app.schemas import UserCreate, UserResponse
+
+router = APIRouter()
+
+@router.post("/register", response_model=UserResponse)
+async def register(user: UserCreate):
+    # Placeholder for registration logic
+    return {"email": user.email, "id": 1, "is_active": True}
+
+@router.post("/login")
+async def login(user: UserCreate):
+    # Placeholder for login logic
+    return {"access_token": "dummy_token", "token_type": "bearer"}
+```
+
+### Query Router ([query.py](file:///c:/Users/shahi/SeekRight/backend/app/routers/query.py))
+```python
+from fastapi import APIRouter
+from app.schemas import QueryRequest, QueryResponse
+
+router = APIRouter()
+
+@router.post("/query", response_model=QueryResponse)
+async def query_transcript(request: QueryRequest):
+    # Placeholder for RAG logic
+    return {
+        "answer": f"You asked: {request.question}. This is a placeholder answer.",
+        "sources": ["source1.txt", "source2.txt"]
+    }
+```
+
+---
+
+## Tests ([test_session.py](file:///c:/Users/shahi/SeekRight/backend/app/tests/test_session.py))
+```python
+from fastapi.testclient import TestClient
+from app.main import app
+
+client = TestClient(app)
+
+def test_create_session():
+    response = client.post(
+        "/api/session",
+        json={
+            "subject_id": 1,
+            "youtube_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+            "uploaded_by": 123
+        }
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert "session_id" in data
+    assert data["processing_status"] == "PROCESSING"
+
+def test_get_session_status():
+    # First create a session
+    create_resp = client.post(
+        "/api/session",
+        json={
+            "subject_id": 1,
+            "youtube_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+            "uploaded_by": 123
+        }
+    )
+    session_id = create_resp.json()["session_id"]
+    
+    # Then get its status
+    response = client.get(f"/api/session/{session_id}/status")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["session_id"] == session_id
+    assert data["processing_status"] == "PROCESSING"
+
+def test_get_invalid_session_status():
+    response = client.get("/api/session/999/status")
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Session not found"
+```
