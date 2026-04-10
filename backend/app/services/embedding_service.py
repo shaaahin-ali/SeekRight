@@ -16,3 +16,7 @@ def embed_texts(texts):
 
 def embed_query(query):
     return model.encode([query])[0]
+
+def embed_and_store(transcript):
+    # Dummy placeholder for embed_and_store phase
+    pass

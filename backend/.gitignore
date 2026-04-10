@@ -1,5 +1,62 @@
-server_log.txt
-server_log_utf8.txt
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+.Python
+*.egg-info/
+dist/
+build/
+
+# ── Virtual Environments ──────────────────────────────────────────────────────
+venv/
+.venv/
+env/
+
+# ── Environment / Secrets ─────────────────────────────────────────────────────
+.env
+*.env
+
+# ── Database files ────────────────────────────────────────────────────────────
 *.db
-*.db-wal
 *.db-shm
+*.db-wal
+*.sqlite3
+
+# ── Large media / binaries ────────────────────────────────────────────────────
+*.zip
+*.tar.gz
+*.mp3
+*.mp4
+*.wav
+*.webm
+*.m4a
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+*.log
+*.txt
+server_log.txt
+server_err.txt
+
+# ── Test / debug scripts (keep tests/ folder only) ────────────────────────────
+check_db.py
+check_deps.py
+diagnose_500.py
+diagnose_ytdlp.py
+test_flow.py
+test_flow_port_8001.py
+test_ytdlp.py
+verify_env.py
+verify_ingestion.py
+verify_ingestion_v2.py
+seed_raw.py
+generate_md_report.py
+
+# ── IDE / OS ──────────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# ── pytest ────────────────────────────────────────────────────────────────────
+.pytest_cache/
