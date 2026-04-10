@@ -1,8 +1,8 @@
 import React, { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { HeroGeometric } from "@/components/ui/shape-landing-hero";
-import { SignInPage } from "@/components/ui/sign-in-flow";
-import Dashboard from "@/pages/Dashboard";
+import { HeroGeometric } from "./components/ui/shape-landing-hero";
+import { SignInPage } from "./components/ui/sign-in-flow";
+import Dashboard from "./pages/Dashboard";
 
 type Page = "landing" | "signin" | "dashboard";
 
