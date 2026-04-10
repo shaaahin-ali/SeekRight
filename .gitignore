@@ -1,17 +1,28 @@
 # ── Python ────────────────────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
+*.pyo
 .Python
 
 # ── Environments ──────────────────────────────────────────────────────────────
 venv/
 .venv/
 
-# ── Secrets ───────────────────────────────────────────────────────────────────
-backend/.env
-frontend/.env
-frontend/.env.local
-frontend/.env.production
+# ── Secrets — never commit .env files ─────────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── Logs & temporary files ────────────────────────────────────────────────────
+*.log
+*.txt.bak
+server_err.txt
+startup.log
+
+# ── Test / Coverage ───────────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
 
 # ── Database ──────────────────────────────────────────────────────────────────
 *.db
@@ -35,5 +46,5 @@ dist/
 .DS_Store
 Thumbs.db
 
-# ── Nested duplicate repo ─────────────────────────────────────────────────────
+# ── Nested duplicate repo (was accidentally tracked as git submodule) ──────────
 SeekRight/
