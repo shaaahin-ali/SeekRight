@@ -28,6 +28,11 @@ def transcribe(youtube_url: str) -> Dict[str, Any]:
         "outtmpl": os.path.join(temp_dir, "audio.%(ext)s"),
         "quiet": True,
         "no_warnings": True,
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["android", "web"]
+            }
+        }
     }
 
     try:
