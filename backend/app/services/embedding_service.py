@@ -3,19 +3,32 @@ from sentence_transformers import SentenceTransformer
 MODEL_NAME = "all-MiniLM-L6-v2"
 EXPECTED_DIMENSION = 384
 
-model = SentenceTransformer(MODEL_NAME)
+import gc
+
+MODEL_NAME = "all-MiniLM-L6-v2"
+EXPECTED_DIMENSION = 384
 
 def get_dimension():
-    return model.get_sentence_embedding_dimension()
-
-assert get_dimension() == EXPECTED_DIMENSION, \
-    f"Model dimension mismatch! Expected {EXPECTED_DIMENSION}, got {get_dimension()}"
+    # Lazy load just to check dimension (cache this ideally, but doing it safely)
+    model = SentenceTransformer(MODEL_NAME)
+    dim = model.get_sentence_embedding_dimension()
+    del model
+    gc.collect()
+    return dim
 
 def embed_texts(texts):
-    return model.encode(texts)
+    model = SentenceTransformer(MODEL_NAME)
+    res = model.encode(texts)
+    del model
+    gc.collect()
+    return res
 
 def embed_query(query):
-    return model.encode([query])[0]
+    model = SentenceTransformer(MODEL_NAME)
+    res = model.encode([query])[0]
+    del model
+    gc.collect()
+    return res
 
 def embed_and_store(transcript):
     # Dummy placeholder for embed_and_store phase

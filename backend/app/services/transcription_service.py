@@ -9,8 +9,10 @@ from typing import Dict, List, Any
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Load once at module import — "tiny" uses far less RAM (crucial for free tier)
-model = whisper.load_model("tiny")
+import gc
+
+# We will lazy-load the model inside the function to prevent out-of-memory on Render
+# model = whisper.load_model("tiny")
 
 
 def _ffmpeg_available() -> bool:
@@ -46,8 +48,14 @@ def transcribe(youtube_url: str) -> Dict[str, Any]:
                 "On Render, add 'ffmpeg' to your system packages or use the Render dashboard."
             )
 
+        logger.info(f"Loading Whisper 'tiny' model into memory...")
+        model = whisper.load_model("tiny")
         logger.info(f"Transcribing: {audio_path}")
         result = model.transcribe(audio_path)
+        
+        # Free memory immediately to prevent Render from crashing
+        del model
+        gc.collect()
 
         return {
             "full_text": result.get("text", ""),
