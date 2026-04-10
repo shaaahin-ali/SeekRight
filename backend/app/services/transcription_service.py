@@ -9,8 +9,8 @@ from typing import Dict, List, Any
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Load once at module import — "base" is fast and free-tier friendly
-model = whisper.load_model("base")
+# Load once at module import — "tiny" uses far less RAM (crucial for free tier)
+model = whisper.load_model("tiny")
 
 
 def _ffmpeg_available() -> bool:
