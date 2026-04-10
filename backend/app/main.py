@@ -29,6 +29,21 @@ app.add_middleware(
 # ── DB Init ───────────────────────────────────────────────────────────────────
 models.Base.metadata.create_all(bind=engine)
 
+# Auto-seed dummy user and subject so Render's empty DB doesn't fail on foreign keys
+from app.database import SessionLocal
+db = SessionLocal()
+try:
+    if not db.query(models.User).filter(models.User.user_id == 1).first():
+        db.add(models.User(user_id=1, name="Demo User", role="Admin", email="demo@example.com"))
+    if not db.query(models.Subject).filter(models.Subject.subject_id == 1).first():
+        db.add(models.Subject(subject_id=1, subject_name="General Knowledge", description="Default subject"))
+    db.commit()
+except Exception as e:
+    db.rollback()
+    logger.error(f"Error seeding database: {e}")
+finally:
+    db.close()
+
 # ── Routers ───────────────────────────────────────────────────────────────────
 app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
 app.include_router(sessions.router, prefix="/api", tags=["Sessions"])
