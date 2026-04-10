@@ -18,39 +18,13 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# ── CORS ──────────────────────────────────────────────────────────────────────
-# In production, set FRONTEND_URL env var to your Vercel deployment URL.
-# Multiple origins can be comma-separated: "https://seekright.vercel.app,https://seekright-xyz.vercel.app"
-FRONTEND_URL = os.getenv("FRONTEND_URL", "")
-
-allowed_origins = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "http://localhost:4173",
-]
-
-if FRONTEND_URL:
-    for origin in FRONTEND_URL.split(","):
-        origin = origin.strip()
-        if origin and origin not in allowed_origins:
-            allowed_origins.append(origin)
-
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=allowed_origins,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-else:
-    # Fallback to allow wildcards if FRONTEND_URL isn't provided
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=False,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # ── DB Init ───────────────────────────────────────────────────────────────────
 models.Base.metadata.create_all(bind=engine)
