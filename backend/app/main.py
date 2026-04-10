@@ -35,13 +35,22 @@ if FRONTEND_URL:
         if origin and origin not in allowed_origins:
             allowed_origins.append(origin)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=allowed_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=allowed_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+else:
+    # Fallback to allow wildcards if FRONTEND_URL isn't provided
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 # ── DB Init ───────────────────────────────────────────────────────────────────
 models.Base.metadata.create_all(bind=engine)
