@@ -336,4 +336,4 @@ Built by Shahin Ali as a showcase of full-stack AI development, RAG systems, and
 
 ---
 
-Questions? Feel free to reach out!
+Questions? Feel free to reach out!.
